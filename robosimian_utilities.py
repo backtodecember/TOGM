@@ -36,7 +36,6 @@ class granularMedia:
 		#print("func is",self.func)
 		self.cT = D['cT'][0][0][0][0]
 		self.estimated_upper_bound = 50 #max number of triangle meshes in convex hull
-
 		#compute the things SA needs...
 
 
@@ -225,7 +224,7 @@ if __name__=="__main__":
 	terrain = granularMedia()
 	#print(np.shape(terrain.W[:,0:2]))
 	#print(terrain.func)
-	for i in [-0.001,-0.002,-0.01,-0.02,-0.03,]:
-		terrain.feasibleWrenchSpace([i,0.2,1,1,0],0.15)[0]
+	#for i in [-0.001,-0.002,-0.01,-0.02,-0.03,]:
+	#	terrain.feasibleWrenchSpace([i,0.2,1,1,0],0.15)[0]
 		#print(terrain.feasibleWrenchSpace([i,0.3,1,1,0],0.15)[0])
 		#print(terrain.feasibleWrenchSpace([i,0.3,1,1,0],0.15)[1])

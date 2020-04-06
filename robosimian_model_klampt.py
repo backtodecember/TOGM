@@ -201,6 +201,18 @@ class robosimian:
 
 		return positions
 
+	def get_Jacobians(self):
+		local_pt = (0,0,0)
+		J1 = np.array(self.robot_all_active.link(13).getJacobian(local_pt))
+		J2 = np.array(self.robot_all_active.link(21).getJacobian(local_pt))
+		J3 = np.array(self.robot_all_active.link(29).getJacobian(local_pt))
+		J4 = np.array(self.robot_all_active.link(37).getJacobian(local_pt))
+		J1 = J1[[3,5,1],:] #orientation jacobian is stacked upon position
+		J2 = J2[[3,5,1],:]
+		J3 = J3[[3,5,1],:]
+		J4 = J4[[3,5,1],:]
+		return J1[:,self.joint_indices_3D]
+
 	def compute_CD(self,u,gravity = (0,0,-9.81)):
 		""" Compute the dynamics of the 2D robot, given by matrices C and D.
 		acceleration = C + D*contact_wrench 
@@ -213,6 +225,7 @@ class robosimian:
 		------------
 		C,D: numpy array nx1 2D arrays...
 		"""
+
 		u = self.u_2D_to_3D(u) #u is a 1D numpy array
 		B_inv = np.array(self.robot_all_active.getMassMatrixInv())
 		I = np.eye(38)
@@ -220,7 +233,11 @@ class robosimian:
 		K = np.subtract(I,B_inv@self.F.T@np.linalg.inv(self.F@B_inv@self.F.T)@self.F)
 		G = np.array(self.robot_all_active.getGravityForces(gravity))
 		a = K@a_from_u.T
+		
 		C = np.subtract(a,K@B_inv@G)
+		#debug
+		print(C[self.joint_indices_3D])
+
 		self._clean_vector(C)
 		J1 = np.array(self.robot_all_active.link(13).getJacobian((0.075,0,0)))
 		J2 = np.array(self.robot_all_active.link(21).getJacobian((0.075,0,0)))

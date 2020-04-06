@@ -12,6 +12,8 @@ from klampt import vis
 import multiprocessing as mp
 from copy import deepcopy
 from klampt.math import vectorops as vo
+import sympy
+
 class robosimianSimulator:
 	def __init__(self,q_2D = None, q_dot_2D = None , dt = 0.01, formulation = 'H', solver = 'cvxpy'):
 		if q_2D.any():
@@ -31,6 +33,7 @@ class robosimianSimulator:
 		self.terrain = granularMedia(material = "sand")
 
 		self.joint_indices_3D = [0,2,4,8,10,12,16,18,20,24,26,28,32,34,36]
+		self.fixed_joint_indicies = [1,3,5,6,7,9,11,13,14,15,17,19,21,22,23,25,27,29,30,31,33,35,37]
 		self.joint_indices_2D = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]
 		self.timer = [0,0,0] #time spent at 
 		self.time = 0
@@ -56,6 +59,9 @@ class robosimianSimulator:
 		self.M_2 = np.zeros((4*3,4*3))#This is the mass of granular material...
 		for i in range(4):
 			self.M_2[0+i*3:3+i*3,0+i*3:3+i*3] = self.ankle_inertia ##same as the ankle mass....
+
+		#PINOCCHIO
+		
 
 		##using half-space or vertex representation of the wrench space
 		#vertex representation is used for sensitivity analysis
@@ -115,7 +121,7 @@ class robosimianSimulator:
 				self.dhx = np.zeros((120,self.Dx+self.Du))
 
 				self.filler_list = []
-				for i in range(self.Dwc+self.Dlambda):
+				for i in range(132):
 					self.filler_list.append(i)
 			elif self.solver == 'mpqp':
 				#TODO:add mpqp
@@ -164,7 +170,8 @@ class robosimianSimulator:
 		print(q_2D,q_dot_2D)
 		self.q_3D = self.robot.set_q_2D_(q_2D)
 		self.q_dot_3D = self.robot.set_q_dot_2D_(q_dot_2D)
-		q_dot_dot_3D = self.simulateOnce(u) #it is a (n,1) np array
+		q_dot_dot_3D,_ = self.simulateOnce(u) #it is a (n,1) np array
+
 		return self._3D_to_2D(q_dot_dot_3D) #this becomes a numpyt 1D array
 
 	def getDynJac(self,x,u):
@@ -177,7 +184,8 @@ class robosimianSimulator:
 
 	def simulateOnce(self,u):#debug,counter):
 		contacts,NofContacts,limb_indices = self.generateContacts()
-
+		# print(contacts)
+		#print('N of contacts:',NofContacts)
 		### H&V representation 
 		if self.formulation == 'H':
 			#note that u here is a 1D numpy array
@@ -309,14 +317,23 @@ class robosimianSimulator:
 				self.A.value = A
 				self.A2.value = A2
 				self.b2.value = b2
-				self.prob.solve(solver=cp.ECOS,max_iters = 1000,verbose = False,warm_start = False)
-				#self.prob.solve(solver=cp.OSQP,verbose = True,warm_start = False)
+
+				start_time = time.time()
+				#self.prob.solve(solver=cp.ECOS,max_iters = 100000,verbose = False,warm_start = False,abstol = 1e-16,reltol = 1e-16)
+				#tmp1 = self.constraints[2].dual_value
+				#print(tmp1)
+				
+				self.prob.solve(solver=cp.OSQP,verbose = False,warm_start = False,eps_abs = 1e-10,eps_rel = 1e-10,max_iter = 10000000)
+				#self.prob.solve(solver=cp.OSQP,verbose = False,warm_start = False)#,eps_abs = 1e-12,eps_rel = 1e-12,max_iter = 10000000)
 				#self.prob.solve(verbose = False,warm_start = True)
-
+				#print(self.constraints[2].dual_value)
+				#print('time:',time.time() - start_time)
 				x_k = self.x.value[0:12]
-				# print("status:", self.prob.status)
+				print('x_k',x_k)
+				print("status:", self.prob.status)
 				self.q_dot_3D = np.add(self.C.value,self.D.value@x_k)
-
+				#set the fixed joint to 0
+				self._zero_3D_vector(self.q_dot_3D)
 				# start_time = time.time()
 				##Calculate the jocobian...
 				#-dEyy
@@ -334,13 +351,16 @@ class robosimianSimulator:
 				self.mudhyx[:,12:116] = np.zeros((self.Dx+self.Du,self.Dlambda))
 				mus = self.constraints[0].dual_value#only need these mus
 				lambdas = self.x.value[12:12+4*26]
-				self.dhx = np.zeros((120,self.Dx+self.Du))
+				#todo: do not need to zero entire matrix
+				self.dhx  = np.zeros((120,self.Dx+self.Du))
 				for (limb_index,Q4s,contact) in zip(limb_indices,Q4s_all_limbs,contacts):
 					counter = 0
 					Q5 = np.zeros((3,30))
 					for Q4 in Q4s:
 						#deal with the jocobian 
 						J_raw = np.hstack((Jp_2D[[limb_index*3+1,limb_index*3+2],:],np.zeros((2,15))))
+
+						##TODO, smooth this out...
 						if contact[2] < 0:
 							J_raw[1,:] = - J_raw[1,:]
 						tmp = self._unvectorize(Q4,3,2)@J_raw
@@ -352,9 +372,13 @@ class robosimianSimulator:
 
 				gammas = self.constraints[2].dual_value
 				constraint_values = -self.x.value[12:12+26*4]
+
+
 				dhy_bar = deepcopy(self.dhy)
+				##debug
 				for i in range(self.Dlambda):
 					dhy_bar[i+12+4,:] = dhy_bar[i+12+4,:]*gammas[i,0]
+
 				F1 = np.zeros((self.Dwc + self.Dlambda + 120,self.Dwc + self.Dlambda + 120))
 				F1[0:self.Dwc + self.Dlambda,0:self.Dwc + self.Dlambda] = self.dEyy.T
 				F1[0:self.Dwc + self.Dlambda,self.Dwc + self.Dlambda:self.Dwc + self.Dlambda+120] = self.dhy.T
@@ -362,23 +386,59 @@ class robosimianSimulator:
 				G = np.eye(self.Dlambda)
 				for i in range(self.Dlambda):
 					G[i,i] = constraint_values[i,0]
+				for i in range(len(gammas)):
+					self.dhx[16+i,:] = gammas[i,0]*self.dhx[12+i,:]
+
 				F1[self.Dwc + self.Dlambda+12+4:self.Dwc + self.Dlambda+120,self.Dwc + self.Dlambda+12+4:self.Dwc + self.Dlambda+120] = G
 				F2 = np.vstack((-self.dEyx.T-self.mudhyx.T,-self.dhx)) #self.dhx already contains the negative?
+				# print('Shape of F1 is',np.shape(F1))
+				# print('Rank of F1 is',np.linalg.matrix_rank(F1))
+				# print(self.dhy.T[110:116,0:12])
+				# np.savetxt('quantity of interest',F1[110:116,:])
 
-				#print('Condition number of F1 is',np.linalg.cond(F1))
+				# print('Rank is', np.linalg.matrix_rank(F1[111:236,:]))
+				# print('Rank is', np.linalg.matrix_rank(F1[0:116,:]))
+				#print('Rank should be',132+104-110)
+				#print(self.filler_list+active_list)
+				#print('Rank of F1 is',np.linalg.matrix_rank(F1))
+
+				# F1 = F1[self.filler_list+active_list,:]
+				# F1 = F1[:,self.filler_list+active_list]
+				# print('Shape of F1 is',np.shape(F1))
+				print('Rank of active constraint_values:',np.linalg.matrix_rank(F1[0:132,0:132]))
+				w,v = np.linalg.eig(F1)
+				print('Condition number of F1 is',np.min(np.absolute(w)))
+				# print('Rank is',np.linalg.matrix_rank(F1[12:116,132:236]))
+				#print(np.linalg.matrix_rank(F1[132:155,:]))
+				# print(np.shape(F1))
+				# print(F1[132:154,0:5])
+				#print('Rank of F1 is',np.linalg.matrix_rank(F1))
 				# start_time2 = time.time()
+
+				##
 				dymu_dx = np.linalg.inv(F1)@F2
 				# print('Inverting the matrix took:',time.time() -start_time2)
 				dwc_dx = dymu_dx[0:self.Dwc,:]
+				print('dwc_dx',dwc_dx[:,0:2])
 				#print(dwc_dx)
 				# print('In total took time:',time.time() - start_time)
 
+				#debug
+				#dwc_dx = dwc_dx*0
+				print('Debug:',F1[15,0:12])
+				print(F2[0:12,15])
+
 				### now calculate dx_dotdx
 				D_2D = D[self.joint_indices_3D,:]
+				#print('dadx',dadx[:,0:2])
 				dadx_full = D_2D@dwc_dx + dadx
 				dx_dotdx = np.zeros((30,42))
 				dx_dotdx[0:15,15:30] = np.eye(15)
 				dx_dotdx[15:30,:] = dadx_full
+				self.q_3D = np.add(np.multiply(self.q_dot_3D,self.dt),self.q_3D)
+				self._zero_3D_vector(self.q_3D)
+				self.robot.set_q_3D(self.q_3D)
+				self.robot.set_q_dot_3D(self.q_dot_3D)
 			else:
 				self.q_dot_3D = self.C.value
 				##TODO: Compute the Jocabian here
@@ -388,8 +448,11 @@ class robosimianSimulator:
 				dx_dotdx[15:30,:] = dadx
 			#### uncomment this to have a continuous simulation....
 			self.q_3D = np.add(np.multiply(self.q_dot_3D,self.dt),self.q_3D)
+
+
 			self.robot.set_q_3D(self.q_3D)
 			self.robot.set_q_dot_3D(self.q_dot_3D)
+
 
 		#################################################################
 		if NofContacts > 0:
@@ -434,6 +497,8 @@ class robosimianSimulator:
 		#for dadx
 		dadx = np.zeros((15,42))
 		current_a = C + D@wc
+		#debug
+		current_a_3D = deepcopy(current_a)
 		current_a = current_a[self.joint_indices_3D,:]
 		#for dEdydx
 		dQ1dx = np.zeros((self.Dx+self.Du,self.Dwc))
@@ -441,7 +506,9 @@ class robosimianSimulator:
 		C = np.add(np.multiply(C,self.dt),self.q_dot_3D) 
 		D = np.multiply(D,self.dt)
 		current_Q1 = np.add(C,D@wc).T@self.robot.get_mass_matrix()@D
+		
 		eps = 1e-6
+
 		for i in range(self.Dx+self.Du):
 			if i < self.Dx:
 				FD_add = [0]*self.Dx
@@ -467,7 +534,6 @@ class robosimianSimulator:
 			D = np.multiply(D,self.dt)
 			Q1 = np.add(C,D@wc).T@self.robot.get_mass_matrix()@D
 			dQ1dx[i,:] = np.multiply(np.subtract(Q1[0],current_Q1),1.0/eps)
-
 		
 		self.robot.set_q_3D(initial_q_3D)
 		self.robot.set_q_dot_3D(initial_q_dot_3D)
@@ -504,6 +570,7 @@ class robosimianSimulator:
 			a = C
 			a = a[self.joint_indices_3D,:]
 			dadx[:,i] = np.multiply(np.subtract(a,current_a),1.0/eps).flatten()
+
 
 		self.robot.set_q_3D(initial_q_3D)
 		self.robot.set_q_dot_3D(initial_q_dot_3D)
@@ -592,7 +659,9 @@ class robosimianSimulator:
 
 		return Q
 
-
+	def _zero_3D_vector(self,x):
+		for i in self.fixed_joint_indicies:
+			x[i] = 0.0
 
 if __name__=="__main__":
 	# q_2D = np.array([0.0,1.1,0.1] + [0.3- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
@@ -605,13 +674,15 @@ if __name__=="__main__":
 	# q_2D = np.array([0.0,0.936,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
 	#   	+[0.6+1.5708,0.0,-0.6])[np.newaxis] #four feet on the ground at the same time 
 
-	q_2D = np.array([0.0,0.94,0.0] + [0.9- 1.5708,0.0,-0.6]+[0.9+1.5708,0.0,-0.6]+[0.9-1.5708,0.0,-0.6] \
+	q_2D = np.array([0.0,0.942,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
 	  	+[0.6+1.5708,0.0,-0.6])[np.newaxis] #four feet on the ground at the same time 
 	q_dot_2D = np.array([0.0]*15)[np.newaxis]
 	q_2D = q_2D.T
 	q_dot_2D = q_dot_2D.T
 	simulator = robosimianSimulator(q_2D = q_2D,q_dot_2D = q_dot_2D, dt = 0.005, formulation = 'V')
 	#simulator.debugSimulation(20)
-	simulator.simulateOnce(np.zeros(12))
+	u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
+	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
+	simulator.simulateOnce(u)
 	#simulator.simulate(1)
 	#print(simulator._3D_to_2D(simulator.q_3D),simulator._3D_to_2D(simulator.q_dot_3D))

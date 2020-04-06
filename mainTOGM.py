@@ -26,6 +26,8 @@ class Robosimian(System):
 
 
 	def jac_dyn(self, t, x, u, p=None):
+		print(x)
+
 		a,J_tmp = self.robot.getDynJac(x,u)
 		a = np.concatenate([x[15:30],a])		
 		J = np.zeros((30,1+30+12))
@@ -73,16 +75,17 @@ problem.ubd = [np.array([-1000]*12),np.array([1000]*12)]
 problem.x0bd = [np.array([0,0.936,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15),\
 	np.array([0,0.936,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15)] 
 #problem.xfbd = [np.array([1.0,0.936,0]+[-10.0]*12 + [0.0]*15),np.array([1.0,0.936,0]+[10.0]*12 +[0.0]*15)] ## set the goal here 
-problem.xfbd = [np.array([0,0.936,0]+[-10.0]*12 + [0.0]*15),np.array([0.0,0.936,0]+[10.0]*12 +[0.0]*15)] #just stay in place...
+problem.xfbd = [np.array([0,0.936,0]+[-10.0]*12 + [0.0]*15),np.array([0.01,0.936,0]+[10.0]*12 +[0.0]*15)] #just stay in place...
 
 
 problem.add_lqr_obj(cost)
 problem.preProcess()
-#cfg = OptConfig(backend='snopt', deriv_check=1, print_file='tmp.out')
-cfg = OptConfig(backend = 'ipopt', deriv_check=0, print_level = 1,print_file='tmp.out')
+cfg = OptConfig(backend='snopt', deriv_check=0, print_file='tmp.out')
+#cfg = OptConfig(backend = 'ipopt', deriv_check=0, print_level = 1,print_file='tmp.out')
 slv = OptSolver(problem, cfg)
 startTime = time.time()
 
+#These are the force and torque that could support the robot in place.
 single_traj_guess = [0,0.936,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15
 single_u_guess = [6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186]
