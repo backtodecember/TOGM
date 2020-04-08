@@ -54,7 +54,7 @@ class MPQP:
         return  np.array([w[i] for i in range(n)]), \
                 np.array([[dwdc[i*n+j] for j in range(n)] for i in range(n)]).transpose()
 
-    def solve_QP(self,g,H,initw=None,mu=0.001,prec=512):
+    def solve_QP(self,g,H,initw=None,mu=0.0001,prec=512):
         n=self.len(g)
         assert n*n==self.len(H)
         w=(ct.c_double*n)()

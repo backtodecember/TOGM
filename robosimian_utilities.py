@@ -40,11 +40,11 @@ class granularMedia:
 
 
 
-	def feasibleWrenchSpace(self,contact,ankle_length,compute_flag,formulation = 'H'):
+	def feasibleWrenchSpace(self,contact,ankle_length,compute_flag):
 		"""Contact is angle, depth, which half, which leg, contact wrench rotation"""
 		"""Matlab package has interpolation, do not do that yet here"""
 
-
+		formulation = 'V'
 		if compute_flag:
 			if formulation == 'H':
 				theta_new = contact[0:2]
@@ -133,7 +133,7 @@ class granularMedia:
 						p = vo.add(p,vo.mul(weights[iteration2],val))
 						#SA
 						w = np.array(weights[iteration2])[np.newaxis].T
-						Q4 = Q4 + w@np.array(grad)[np.newaxis]
+						Q4 = Q4 + np.dot(w,np.array(grad)[np.newaxis])
 					#p[2] = -p[2]  #the torque defined when robosimian is collecting data is y, into the page.. no longer needs to flip here
 					unit_direction =  [-math.sin(theta_new[1]),0,-math.cos(theta_new[1])]
 					tmp = vo.cross(vo.mul(unit_direction,ankle_length/2.0-self.cT),[p[0],0,p[1]])

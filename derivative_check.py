@@ -26,12 +26,12 @@ def jac_dyn(x, u, p=None):
 	# 	J[:,i+1] = np.multiply(np.subtract(np.concatenate([tmp_x[15:30],tmp_a]),a),1.0/eps)
 	# 	C1 = deepcopy(J[:,i+1])
 	# 	#print('SA:',J_SA[:,i])
-	eps = 1e-3
+	eps = 1e-7
 	J = np.zeros((30,1+30+12))
 
 	print('----')
 
-	for i in [1]:
+	for i in [0,1,2,3]:
 		FD_vector = np.zeros(30)
 		FD_vector[i] = eps
 		tmp_x = np.add(x,FD_vector)
@@ -52,8 +52,8 @@ def jac_dyn(x, u, p=None):
 	# 	C3 = J[:,i+1]
 
 
-	print(J[:,1:3])
-	print('SA',J_SA[:,0:2])
+	print(J[:,1:4])
+	print('SA',J_SA[:,0:3])
 
 
 
@@ -68,7 +68,7 @@ def jac_dyn(x, u, p=None):
 	#maybe convert J to coomatrix
 	return a,J
 
-x0 = np.array([0,0.936,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15) #0.936 -- -0.08 ankle depth
+x0 = np.array([0,0.943,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15) #0.936 -- -0.08 ankle depth
 u0 = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
 jac_dyn(x0,u0)

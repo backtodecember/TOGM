@@ -4,7 +4,7 @@ from klampt.math import vectorops as vo
 import numpy as np
 import math
 import pinocchio
-class robosimian:
+class PINOCCHIO_robosimian:
 	def __init__(self,dt = 0.01):
 		self.urdf_filename = 'data/robosimian_caesar_new_pinnochio.urdf'
 		self.model = pinocchio.buildModelFromUrdf(urdf_filename)
@@ -13,6 +13,7 @@ class robosimian:
 		self.v = np.array([0.0]*15)
 		# ####link 7-13 RF; 15-21 RR; 23-29 LR; 31-37 LF
 		self.dt = dt
+		self.
 
 	def set_q(self,a):
 		"""
@@ -48,6 +49,18 @@ class robosimian:
 			self.v[i] = q_dot[i]
 		return 
 
+	def u_to_full_matrix(self,u):
+		"""
+		Parameters:
+		---------------
+		u:numpy 1D array, 12 elements
+
+		Return:
+		----------------
+		numpy column vector, 19 elements
+		"""
+		u_full = 
+
 	def compute_acceleration(self):
 
 
@@ -68,7 +81,7 @@ class robosimian:
 		"""
 		print('flag')
 
-		u = self.u_2D_to_3D(u) #u is a 1D numpy array
+		u = self.u_to_full_matrix(u) 
 		B_inv = np.array(self.robot_all_active.getMassMatrixInv())
 		I = np.eye(38)
 		a_from_u = np.array(self.robot_all_active.accelFromTorques(u))
