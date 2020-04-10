@@ -28,20 +28,20 @@ class robosimian:
 		self.ankle_length = 0.15
 		# ####link 7-13 RF; 15-21 RR; 23-29 LR; 31-37 LF
 		self.dt = dt
-		####scale weight
-		desired_total_mass = 99.888 #99.888 is the original total mass
-		total_mass = 0.0
-		#link_list = [5] + list(range(7,14)) + list(range(15,22)) + list(range(23,30)) + list(range(31,37))
+		
+		# desired_total_mass = 99.888 #99.888 is the original total mass
+		# total_mass = 0.0
+		# #link_list = [5] + list(range(7,14)) + list(range(15,22)) + list(range(23,30)) + list(range(31,37))
 
-		for i in range(self.N_of_joints_3D):
-			total_mass +=self.robot_all_active.link(i).getMass().getMass()
-		for i in range(self.N_of_joints_3D):
-			#print('---------')
-			#print(robot.link(i).getMass().getMass())
-			mass_to_be_set = self.robot_all_active.link(i).getMass().getMass() * desired_total_mass/total_mass
-			mass_structure = self.robot_all_active.link(i).getMass()
-			mass_structure.setMass(mass_to_be_set)
-			self.robot_all_active.link(i).setMass(mass_structure)
+		# for i in range(self.N_of_joints_3D):
+		# 	total_mass +=self.robot_all_active.link(i).getMass().getMass()
+		# for i in range(self.N_of_joints_3D):
+		# 	#print('---------')
+		# 	#print(robot.link(i).getMass().getMass())
+		# 	mass_to_be_set = self.robot_all_active.link(i).getMass().getMass() * desired_total_mass/total_mass
+		# 	mass_structure = self.robot_all_active.link(i).getMass()
+		# 	mass_structure.setMass(mass_to_be_set)
+		# 	self.robot_all_active.link(i).setMass(mass_structure)
 
 		self.F = np.zeros((23,38)) # selection matrix
 		for i in range(len(self.fixed_joint_indicies)):			
@@ -260,31 +260,31 @@ class robosimian:
 		C = C[np.newaxis].T
 		return C[self.joint_indices_3D,:],D[self.joint_indices_3D,:]
 
-	# def compute_CD_fixed(self,gravity = (0,0,-9.81)):
+	def compute_CD_fixed(self,gravity = (0,0,-9.81)):
 
-	# 	B_inv = np.array(self.robot_all_active.getMassMatrixInv())
-	# 	I = np.eye(38)
-	# 	K = np.subtract(I,B_inv@self.F_fixed.T@np.linalg.inv(self.F_fixed@B_inv@self.F_fixed.T)@self.F_fixed)
-	# 	G = np.array(self.robot_all_active.getGravityForces(gravity))
-	# 	C = np.multiply(K@B_inv@G,-1.0)
-	# 	self._clean_vector(C)
-	# 	J1 = np.array(self.robot_all_active.link(13).getJacobian((0.075,0,0)))
-	# 	J2 = np.array(self.robot_all_active.link(21).getJacobian((0.075,0,0)))
-	# 	J3 = np.array(self.robot_all_active.link(29).getJacobian((0.075,0,0)))
-	# 	J4 = np.array(self.robot_all_active.link(37).getJacobian((0.075,0,0)))
-	# 	J1 = J1[[3,5,1],:] #orientation jacobian is stacked upon position
-	# 	J2 = J2[[3,5,1],:]
-	# 	J3 = J3[[3,5,1],:]
-	# 	J4 = J4[[3,5,1],:]
-	# 	J = np.vstack((J1,np.vstack((J2,np.vstack((J3,J4))))))
-	# 	D = K@B_inv@J.T
+		B_inv = np.array(self.robot_all_active.getMassMatrixInv())
+		I = np.eye(38)
+		K = np.subtract(I,B_inv@self.F_fixed.T@np.linalg.inv(self.F_fixed@B_inv@self.F_fixed.T)@self.F_fixed)
+		G = np.array(self.robot_all_active.getGravityForces(gravity))
+		C = np.multiply(K@B_inv@G,-1.0)
+		self._clean_vector(C)
+		J1 = np.array(self.robot_all_active.link(13).getJacobian((0.075,0,0)))
+		J2 = np.array(self.robot_all_active.link(21).getJacobian((0.075,0,0)))
+		J3 = np.array(self.robot_all_active.link(29).getJacobian((0.075,0,0)))
+		J4 = np.array(self.robot_all_active.link(37).getJacobian((0.075,0,0)))
+		J1 = J1[[3,5,1],:] #orientation jacobian is stacked upon position
+		J2 = J2[[3,5,1],:]
+		J3 = J3[[3,5,1],:]
+		J4 = J4[[3,5,1],:]
+		J = np.vstack((J1,np.vstack((J2,np.vstack((J3,J4))))))
+		D = K@B_inv@J.T
 
-	# 	##debug, add the torques for fixed joints
-	# 	L = np.linalg.inv(self.F_fixed@B_inv@self.F_fixed.T)@self.F_fixed@B_inv
-	# 	L_prime = L@G
-	# 	L_J = np.multiply(L@J.T,-1.0)
-
-	# 	return C[np.newaxis].T,D,L_prime,L_J
+		##debug, add the torques for fixed joints
+		L = np.linalg.inv(self.F_fixed@B_inv@self.F_fixed.T)@self.F_fixed@B_inv
+		L_prime = L@G
+		L_J = np.multiply(L@J.T,-1.0)
+		C = C[np.newaxis].T
+		return C[self.joint_indices_3D,:],D[self.joint_indices_3D,:],L_prime,L_J
 
 	def compute_Jp(self, contact_list):
 		Jp = np.zeros((12,38))
