@@ -123,8 +123,8 @@ class robosimianSimulator:
 		b2 = np.zeros((4,1))
 		Jp = self.robot.compute_Jp(contact_list=limb_indices)
 		
-		#gradient version..
-		C, D = self.robot.compute_CD(u) # different from above, C = C*dt + Vk, D = D*dt
+		#  accel = C + D*wc, where wc is contact wrench
+		C, D = self.robot.compute_CD(u)
 		#C,D,L_prime,L_J = self.robot.compute_CD_fixed()
 		if SA:
 			Q4s_all_limbs = []
