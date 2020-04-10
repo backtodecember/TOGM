@@ -163,7 +163,7 @@ class robosimianSimulator:
 				#print('time:',time.time() - start_time)
 				x_k = self.x.value[0:12]
 				wc = x_k
-				#print('ground reaction force',x_k)
+				print('ground reaction force',x_k)
 				if not self.prob.status == "optimal":
 					print("cvxpy status:", self.prob.status)
 			
@@ -238,11 +238,11 @@ class robosimianSimulator:
 				D = D*self.dt
 				C = C*self.dt
 				M = self.robot.get_mass_matrix()
-				H = np.dot(D.T,np.dot(M,D))
-				g = np.dot((self.q_dot.T + C.T),np.dot(M,D))
+				H = D.T@M@D
+				g = (self.q_dot.T + C.T)@M@D
 				g = g.T
-				gw = np.dot(A.T,g)
-				Hw = np.dot(A.T,np.dot(H,A))
+				gw = A.T@g
+				Hw = A.T@H@A
 				Hw.astype(np.float32)
 				gw.astype(np.float32)
 
@@ -253,8 +253,8 @@ class robosimianSimulator:
 				# w2,dwdg2,dwdh2=self.mpqp.solve_QP(gw,Hw,initw = w2,prec=512)
 				# print('time elapsed',time.time() - start_time)
 				w2 = np.array(w2)[np.newaxis].T
-				print('ground reaction force',np.dot(A,w2))
-				wc = np.dot(A,w2)
+				print('ground reaction force',A@w2)
+				wc = A@w2
 				if continuous_simulation:
 					self.q_dot = C*self.dt+D@wc*self.dt
 
@@ -283,9 +283,9 @@ class robosimianSimulator:
 		#################################################################
 		if NofContacts > 0:
 			if SA:
-				return np.add(C,D@wc),dx_dotdx
+				return C+D@wc,dx_dotdx
 			else:
-				return np.add(C,D@wc)
+				return C+D@wc
 		else:
 			if SA:
 				return C,dx_dotdx
@@ -365,10 +365,9 @@ class robosimianSimulator:
 		#for dEdydx
 		dQ1dx = np.zeros((self.Dx+self.Du,self.Dwc))
 		current_x = np.ravel(np.vstack((initial_q,initial_q_dot)))
-		C = np.add(np.multiply(C,self.dt),self.q_dot) 
-		D = np.multiply(D,self.dt)
-		current_Q1 = np.dot(np.add(C,np.dot(D,wc)).T,np.dot(self.robot.get_mass_matrix(),D))
-		
+		C = (C*self.dt)+self.q_dot
+		D = D*self.dt
+		current_Q1 = (C+D@wc).T@(self.robot.get_mass_matrix()@D)
 		eps = 1e-6
 
 		for i in range(self.Dx+self.Du):
@@ -521,25 +520,19 @@ class robosimianSimulator:
 
 if __name__=="__main__":
 
-	#q_2D = np.array([0.0,1.1,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
-	#   	+[0.6+1.5708,0.0,-0.6])[np.newaxis] #four feet on the ground at the same time 
+	q_2D = np.array([0.0,0.936,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
+	  	+[0.6+1.5708,0.0,-0.6])[np.newaxis] #four feet on the ground at the same time 
 	# q_2D = np.array([0.0,0.936,0.0] + [0.6- 1.5708,0.0,-0.6]+[-0.6+1.5708,0.0,0.6]+[0.6-1.5708,0.0,-0.6] \
-	#   	+[-0.6+1.5708,0.0,0.6])[np.newaxis]
+	#   	+[-0.6+1.5708,0.0,0.6])[np.newaxis] #symmetric limbs
 
 	q_dot_2D = np.array([0.0]*15)[np.newaxis]
 	q_2D = q_2D.T
 	q_dot_2D = q_dot_2D.T
-	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'cvxpy')
-	#simulator.debugSimulation(20)
+	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'mpqp')
 	u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
 		5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
-	#simulator.simulateOnce(u)
 
-	# simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'mpqp')
-	# #simulator.debugSimulation(20)
-	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
-	# 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
-	#simulator.simulateOnce(u)
+	simulator.simulateOnce(u)
 	#simulator.simulate(1)
 	#print(simulator._3D_to_2D(simulator.q_3D),simulator._3D_to_2D(simulator.q_dot_3D))
-	simulator.debugSimulation()
+	#simulator.debugSimulation()
