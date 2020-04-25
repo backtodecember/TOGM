@@ -9,34 +9,52 @@ from scipy.spatial import ConvexHull
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 class granularMedia:
-	def __init__(self,material = "sand"):
-		if material == "sand":
+	def __init__(self,material = "sand",print_level = 0,augmented = False):
+
+		self.print_level = print_level
+		self.augmented = augmented
+		if augmented:
 			mat_contents = sio.loadmat('data/data&weightsSand.mat')
+			D = mat_contents['D']
+			self.cT = D['cT'][0][0][0][0]
+			self.Nvel = D['Nvel'][0][0][0][0]
+
 			self.material_range = [-0.07,0.9]
-		elif material == "pebbles":
-			mat_contents = sio.loadmat('data/data&weightsPebbles.mat')
-			self.material_range = [-0.045,0.9]
-		D = mat_contents['D']
-		self.data = D['data'][0][0]
-		if material == "sand":
-			#self.W = D['W'][0][0]
-			#self.eta = D['eta'][0][0][0][0]
-			#self.func = D['func'][0][0][0][0] - 1 #matlab is 1-based...
-			#polyeven extrapolates better
-			self.W = np.load('data/sandPolyevenW.npy')
+			self.W = np.load('data/sandPolyevenWAugmented.npy')
 			self.func = 4 #polyeven
-			self.eta = 4
+			self.eta = 2
+
+			self.theta = np.load('data/sandPolyevenThetaAugmented.npy')
+			self.Ntheta = 33
 		else:
-			#The pebbles seems too rigid
-			self.W = np.load('pebblesLinearW.npy')
-		self.theta = D['theta'][0][0]
-		self.Nvel = D['Nvel'][0][0][0][0]
-		self.Ntheta = D['Ntheta'][0][0][0][0]
-		
-		#print("func is",self.func)
-		self.cT = D['cT'][0][0][0][0]
-		self.estimated_upper_bound = 50 #max number of triangle meshes in convex hull
+			if material == "sand":
+				mat_contents = sio.loadmat('data/data&weightsSand.mat')
+				self.material_range = [-0.07,0.9]
+			elif material == "pebbles":
+				mat_contents = sio.loadmat('data/data&weightsPebbles.mat')
+				self.material_range = [-0.045,0.9]
+			D = mat_contents['D']
+			self.data = D['data'][0][0]
+			if material == "sand":
+				#self.W = D['W'][0][0]
+				#self.eta = D['eta'][0][0][0][0]
+				#self.func = D['func'][0][0][0][0] - 1 #matlab is 1-based...
+				#polyeven extrapolates better
+				self.W = np.load('data/sandPolyevenW.npy')
+				self.func = 4 #polyeven
+				self.eta = 4
+			else:
+				#The pebbles seems too rigid
+				self.W = np.load('pebblesLinearW.npy')
+			self.theta = D['theta'][0][0]
+			self.Nvel = D['Nvel'][0][0][0][0]
+			self.Ntheta = D['Ntheta'][0][0][0][0]
+			
+			#print("func is",self.func)
+			self.cT = D['cT'][0][0][0][0]
+			self.estimated_upper_bound = 50 #max number of triangle meshes in convex hull
 		#compute the things SA needs...
+
 
 
 
@@ -70,8 +88,9 @@ class granularMedia:
 						wrenches[iteration,0] = -wrenches[iteration,0]
 						wrenches[iteration,2] = -wrenches[iteration,2]
 
-				average_wrench = self._average(wrenches)
+				# average_wrench = self._average(wrenches)
 
+				# plot_flag = True
 				# if plot_flag:		
 				# 	fig = plt.figure()
 				# 	ax = plt.axes(projection = '3d')
@@ -80,9 +99,10 @@ class granularMedia:
 				# 	ax.set_xlabel('Fx (N)')
 				# 	ax.set_ylabel('Fz (N)')
 				# 	ax.set_zlabel('Torque (Nm)')
+
 				K = ConvexHull(wrenches).simplices
 
-				#Plot to debug
+				# #Plot to debug
 
 				# if plot_flag:
 				# 	for tri in K:
@@ -128,12 +148,29 @@ class granularMedia:
 					weights = self.W[iteration*self.Ntheta:iteration*self.Ntheta+self.Ntheta]
 					p = [0,0,0] 
 					Q4 = np.zeros((3,2))
+					# debug
+					# if self.print_level == 1:
+					# 	if iteration == 9:
+					# 		print('---- in utilities-----')
 					for iteration2 in range(self.Ntheta):
 						val,grad = self._RBF(theta_new,self.theta[iteration2],self.eta,self.func)
+
+						# debug
+						# if self.print_level == 1:
+						# 	if iteration == 9:
+						# 		print(val,grad)
+
+						
+
 						p = vo.add(p,vo.mul(weights[iteration2],val))
 						#SA
 						w = np.array(weights[iteration2])[np.newaxis].T
 						Q4 = Q4 + np.dot(w,np.array(grad)[np.newaxis])
+
+					# if self.print_level == 1:
+					# 	if iteration == 9:
+					# 		print('----------------------')
+					# 		print('Q4',Q4)
 					#p[2] = -p[2]  #the torque defined when robosimian is collecting data is y, into the page.. no longer needs to flip here
 					unit_direction =  [-math.sin(theta_new[1]),0,-math.cos(theta_new[1])]
 					tmp = vo.cross(vo.mul(unit_direction,ankle_length/2.0-self.cT),[p[0],0,p[1]])
@@ -144,11 +181,45 @@ class granularMedia:
 					#wrenches[iteration][0:2] = so2.apply(wrenches[iteration][0:2],slope_angle)
 
 					#deal with the mirror configuration, flip x force and torque. z force can stay the same..
-					if contact[2] < 0:
-						wrenches[iteration,0] = -wrenches[iteration,0]
-						wrenches[iteration,2] = -wrenches[iteration,2]
+					if not self.augmented:
+						if contact[2] < 0:
+							wrenches[iteration,0] = -wrenches[iteration,0]
+							wrenches[iteration,2] = -wrenches[iteration,2]
 
 					Q4s[iteration,:] = self._vectorize(Q4)
+
+
+				# plot_flag = True
+				# average_wrench = self._average(wrenches)
+				# print('The wrenches are:',wrenches)
+				# if plot_flag:		
+				# 	fig = plt.figure()
+				# 	ax = plt.axes(projection = '3d')
+				# 	ax.scatter3D(wrenches[:,0],wrenches[:,1],wrenches[:,2],c = 'g')
+
+
+				# 	#debug
+				# 	# wc2 = [6.74352075e+00,1.98369739e+02,7.73679077e-02]
+
+				# 	# wc = [-35.24959736,243.80257131,-10.48360171]
+				# 	# ax.scatter3D(wc[0],wc[1],wc[2],c='r')
+				# 	# ax.scatter3D(wc2[0],wc2[1],wc2[2],c='b')
+				# 	#ax.scatter3D(average_wrench[0],average_wrench[1],average_wrench[2],c='r')
+				# 	ax.set_xlabel('Fx (N)')
+				# 	ax.set_ylabel('Fz (N)')
+				# 	ax.set_zlabel('Torque (Nm)')
+
+				# K = ConvexHull(wrenches).simplices
+
+				# #Plot to debug
+
+				# if plot_flag:
+				# 	for tri in K:
+				# 		x = [wrenches[tri[0],0],wrenches[tri[1],0],wrenches[tri[2],0],wrenches[tri[0],0]]
+				# 		y = [wrenches[tri[0],1],wrenches[tri[1],1],wrenches[tri[2],1],wrenches[tri[0],1]]
+				# 		z = [wrenches[tri[0],2],wrenches[tri[1],2],wrenches[tri[2],2],wrenches[tri[0],2]]
+				# 		ax.plot3D(x,y,z,'red')
+				# 	plt.show()
 
 				return wrenches.T,Q4s
 
@@ -173,8 +244,15 @@ class granularMedia:
 		#out = [r,math.exp(-(eta*r)**2),math.sqrt(1+(eta*r)**2)]
 
 		if func == 4: #polyeven
-			dphidr = 3*r**2*math.log(r**r)+r**3*(math.log(r)+1)
+			if self.augmented:
+				dphidr = math.log(r**r)+r*(math.log(r)+1)
+			else:
+				dphidr = 3*r**2*math.log(r**r)+r**3*(math.log(r)+1)
+
+			#the bug is here.. need to scale....
+
 			drdtheta_new = vo.mul(vo.sub(_theta1,_theta2),1.0/r)
+			drdtheta_new[0] = drdtheta_new[0]*scale
 			return r**(eta-1)*math.log(r**r),vo.mul(drdtheta_new,dphidr) #RBF and its gradient...
 		else:
 			return r , []

@@ -16,13 +16,17 @@ import multiprocessing as mp
 from copy import deepcopy
 from klampt.math import vectorops as vo
 import ctypes as ct
+import configs
+import pdb
+import mosek
 class robosimianSimulator:
-	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01, solver = 'cvxpy'):
+	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01, solver = 'cvxpy',print_level = 0, augmented = False):
 
-		self.robot = robosimian()
+		self.robot = robosimian(print_level = print_level)
 		self.q = q
 		self.q_dot = q_dot
-		self.terrain = granularMedia(material = "sand")
+		self.print_level = print_level
+		self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented)
 		self.dt = dt
 		self.time = 0
 
@@ -31,7 +35,7 @@ class robosimianSimulator:
 		self.Dwc = 12 
 		self.Dlambda = 4*26
 		self.solver = solver
-
+		self.augmented = augmented
 		self.robot.set_q_2D(self.q)
 		self.robot.set_q_dot_2D(self.q_dot)
 		#set up M1, which is used for scaling inertia w.r.t. granular media inertia during optimization
@@ -58,14 +62,18 @@ class robosimianSimulator:
 			self.A = cp.Parameter((3*4,26*4))
 			self.A2 = cp.Parameter((4,26*4))
 			self.b2 = cp.Parameter((4,1))
-			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
-				cp.quad_form(self.Jp*(self.C+self.D@self.x[0:12]),self.M_2))
-			#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
+			#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
+			#	cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
+			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
 
 			self.constraints = [self.x[0:12] - self.A@self.x[12:12+26*4]== np.zeros((12,1)),\
 				self.A2@self.x[12:12+26*4] <= self.b2,\
 				-self.x[12:12+26*4] <= np.zeros((26*4,1))]
-			self.prob = cp.Problem(self.obj, self.constraints)			
+			self.prob = cp.Problem(self.obj, self.constraints)
+			A2 = np.zeros((4,self.Dlambda))
+			for i in range(4):
+				A2[i,i*26:(i+1)*26] = np.ones((1,26)) 	
+			self.A2.value = A2		
 			#self.expr = cp.transforms.indicator(self.constraints)
 
 			#things for jacobian
@@ -110,22 +118,41 @@ class robosimianSimulator:
 		q_dot = x[15:30]
 		self.q = q[np.newaxis].T
 		self.q_dot = q_dot[np.newaxis].T
+
 		self.robot.set_q_2D_(q)
 		self.robot.set_q_dot_2D_(q_dot)
-		a = self.simulateOnce(u)
-		return a
+		a,C,D,wc = self.simulateOnce(u)
+		return a,C,D,wc
 
-	def simulateOnce(self,u,continuous_simulation = False, SA = False):#debug,counter):
+	def getStaticTorques(self,x):
+		q = x[0:15]
+		q_dot = x[15:30]
+		self.q = q[np.newaxis].T
+		self.q_dot = q_dot[np.newaxis].T
+		self.robot.set_q_2D_(q)
+		self.robot.set_q_dot_2D_(q_dot)
+		u = 0
+		a,t = self.simulateOnce(u, fixed = True)
+		return t
+
+	def simulateOnce(self,u,continuous_simulation = False, SA = False, fixed = False):#debug,counter):
 		contacts,NofContacts,limb_indices = self.generateContacts()
-		print('contacts',contacts)
+		if self.print_level == 1:
+			print('contacts',contacts)
 		A = np.zeros((self.Dwc,self.Dlambda))
-		A2 = np.zeros((4,self.Dlambda)) 
+
 		b2 = np.zeros((4,1))
 		Jp = self.robot.compute_Jp(contact_list=limb_indices)
 		
 		#  accel = C + D*wc, where wc is contact wrench
-		C, D = self.robot.compute_CD(u)
-		#C,D,L_prime,L_J = self.robot.compute_CD_fixed()
+		if fixed:
+			C,D,L_prime,L_J = self.robot.compute_CD_fixed()
+		else:
+			C, D = self.robot.compute_CD(u)
+		
+		if self.print_level == 1:
+			print('C:')
+			print(C)
 		if SA:
 			Q4s_all_limbs = []
 			######compute the wrench spaces serially #####
@@ -140,8 +167,11 @@ class robosimianSimulator:
 				self.dhy[contact[3]*3:(contact[3]+1)*3,contact[3]*26+12:(contact[3]+1)*26+12] = -add_A
 				Q4s_all_limbs.append(Q4s)
 
-			A2[contact[3],contact[3]*26:(contact[3]+1)*26] = np.ones((1,26))
+
 			b2[contact[3]] = 1
+		if self.print_level == 1:
+			print("wrench vertices from limb 1",A[0:3,0:26])
+			# print("active vertex",A[3:6,9+26])
 
 		if NofContacts > 0:
 
@@ -151,23 +181,50 @@ class robosimianSimulator:
 				self.M.value = self.robot.get_mass_matrix()
 				self.Jp.value = Jp
 				self.A.value = A
-				self.A2.value = A2
+				#self.A2.value = A2
 				self.b2.value = b2
 
-				start_time = time.time()
-
-				self.prob.solve(solver=cp.OSQP,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
+				#start_time = time.time()
+				#mosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
+				#self.prob.solve(solver=cp.MOSEK,mosek_params = mosek_param,verbose = True,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
+				self.prob.solve(solver=cp.ECOS,verbose = False,warm_start = False,abstol = 1e-12,reltol = 1e-12)				
 				#self.prob.solve(solver=cp.OSQP,verbose = False,warm_start = False)#,eps_abs = 1e-12,eps_rel = 1e-12,max_iter = 10000000)
 				#self.prob.solve(verbose = False,warm_start = True)
 				#print(self.constraints[2].dual_value)
 				#print('time:',time.time() - start_time)
 				x_k = self.x.value[0:12]
 				wc = x_k
-				print('ground reaction force',x_k)
+				if self.print_level == 1:
+					print('ground reaction force',x_k)
+					print('acceleration')
+					print(C + D@x_k)
+					print('objective value',(self.C.value+self.D.value@self.x.value[0:12]).T@self.M.value@(self.C.value+self.D.value@self.x.value[0:12]))
+				#print(C,D)
+				v_k_1 = self.C.value+D@wc*self.dt
+
+				#print('objectove value:',v_k_1.T@self.M.value@v_k_1)
+				# print('lambdas',self.x.value[12:12+26])
+				print("cvxpy status:", self.prob.status)
 				if not self.prob.status == "optimal":
 					print("cvxpy status:", self.prob.status)
 			
-				#Sensitivity analysis
+
+				# gammas = np.vstack((self.constraints[1].dual_value,self.constraints[2].dual_value))
+
+				# print('constraint values:',self.A2.value@self.x.value[12:12+26*4])
+				# print(self.x.value[12:12+26*4])
+				#debug:
+				if self.print_level == 1:
+					#print('active constraints (multipliers not close to  0:')
+					gammas = np.vstack((self.constraints[1].dual_value,self.constraints[2].dual_value))
+
+					print('constraint values:',self.A2.value@self.x.value[12:12+26*4])
+					print(self.x.value[12:12+26*4])
+					
+					# for i in range(108):
+					# 	if math.fabs(gammas[i,0]) > 1e-8:
+					# 		print(i)
+				#Sensitivity analysis 
 				if SA:
 					#-dEyy
 					self.dEyy[0:12,0:12] = self.D.value.T@self.M.value@self.D.value				
@@ -184,16 +241,30 @@ class robosimianSimulator:
 						for Q4 in Q4s:
 							#deal with the jocobian 
 							J_raw = np.hstack((Jp[[limb_index*3+1,limb_index*3+2],:],np.zeros((2,15))))
-							##TODO, smooth this out...
-							if contact[2] < 0:
-								J_raw[1,:] = - J_raw[1,:]
-							tmp = self._unvectorize(Q4,3,2)@J_raw
+							##TODO, smooth this out for the not augmented situation
+							if not self.augmented:
+								if contact[2] < 0:
+									J_raw[1,:] = - J_raw[1,:]
+
+							tmp = self._unvectorize(Q4,3,2)@J_raw						
 							Q5 = Q5 - lambdas[limb_index*26+counter]*tmp
+							##debug
+							# if self.print_level == 1:
+							# 	if counter == 9:
+							# 		print('lambda:',lambdas[limb_index*26+counter])
+							# 		#print('J_raw:',J)
+							# 		print(self._unvectorize(Q4,3,2))
+							# 		#print('flag',lambdas[limb_index*26+counter]*tmp)
+
+
 							Q4 = -mus[limb_index*3:limb_index*3+3,0]@tmp
 							self.mudhyx[0:self.Dx,12+limb_index*26+counter] = Q4
 							counter = counter + 1
 						self.dhx[limb_index*3:limb_index*3+3,0:self.Dx] = Q5
-
+						#debug
+						# if self.print_level == 1:
+						# 	if contact[2] < 0:
+						# 		print('limb_index',limb_index)
 					#Here:
 					gammas = np.vstack((self.constraints[1].dual_value,self.constraints[2].dual_value))
 					constraint_values = np.vstack((self.A2.value@self.x.value[12:12+26*4]-b2,-self.x.value[12:12+26*4]))
@@ -218,28 +289,31 @@ class robosimianSimulator:
 					F1[self.Dwc + self.Dlambda+12:self.Dwc + self.Dlambda+120,self.Dwc + self.Dlambda+12:self.Dwc + self.Dlambda+120] = G
 					F2 = np.vstack((-self.dEyx.T-self.mudhyx.T,-self.dhx)) #self.dhx already contains the negative?
 					##
-					dymu_dx = np.linalg.pinv(F1)@F2
+					dymu_dx = np.linalg.inv(F1)@F2
 					dwc_dx = dymu_dx[0:self.Dwc,:]
-					#print('dadx',dadx[:,0:2])
+					if self.print_level == 1:
+						print('dwcdx',dwc_dx[:,0:3])
 					dadx_full = D@dwc_dx + dadx
 					dx_dotdx = np.zeros((30,42))
 					dx_dotdx[0:15,15:30] = np.eye(15)
 					dx_dotdx[15:30,:] = dadx_full
 
-				##### display the joint torques when fixed
-				# all_fixed_joint_torques = np.add(L_prime,(L_J@x_k).ravel())
-				# fixed_joint_torques = all_fixed_joint_torques[[5,7,9,13,15,17,21,23,25,29,31,33]]
-				# print(fixed_joint_torques)
+
+				if fixed:
+					all_fixed_joint_torques = np.add(L_prime,(L_J@x_k).ravel())
+					fixed_joint_torques = all_fixed_joint_torques[[5,7,9,13,15,17,21,23,25,29,31,33]]
+					if self.print_level == 1:
+						print('fixed joint torques',fixed_joint_torques)
 				if continuous_simulation:
 					self.q_dot = self.C.value+self.D.value@wc
 
 			elif self.solver == 'mpqp':
 
-				D = D*self.dt
-				C = C*self.dt
+				D_prime = D*self.dt
+				C_prime = C*self.dt
 				M = self.robot.get_mass_matrix()
-				H = D.T@M@D
-				g = (self.q_dot.T + C.T)@M@D
+				H = D_prime.T@M@D_prime
+				g = (self.q_dot.T + C_prime.T)@M@D
 				g = g.T
 				gw = A.T@g
 				Hw = A.T@H@A
@@ -248,12 +322,16 @@ class robosimianSimulator:
 
 				start_time = time.time()
 				# initw = np.array([0,0,0,0,0,0,0,0,0,0,0,0])
-				w2,dwdg2,dwdh2=self.mpqp.solve_QP(gw,Hw,prec=512)
+				w2,dwdg2,dwdh2=self.mpqp.solve_QP(gw,Hw,mu=1e-10,prec=512)
 				print('time elapsed',time.time() - start_time)
 				# w2,dwdg2,dwdh2=self.mpqp.solve_QP(gw,Hw,initw = w2,prec=512)
 				# print('time elapsed',time.time() - start_time)
 				w2 = np.array(w2)[np.newaxis].T
 				print('ground reaction force',A@w2)
+
+				
+				v_k_1 = self.q_dot + C + D@A@w2
+				#print('objectove value:',v_k_1.T@M@v_k_1)
 				wc = A@w2
 				if continuous_simulation:
 					self.q_dot = C*self.dt+D@wc*self.dt
@@ -273,7 +351,8 @@ class robosimianSimulator:
 		
 		if continuous_simulation:
 			self.q = self.q_dot*self.dt+self.q
-			print(self.q)
+			if self.print_level == 1:
+				print('current q:',self.q)
 
 
 		self.robot.set_q_2D(self.q)
@@ -281,45 +360,47 @@ class robosimianSimulator:
 
 
 		#################################################################
+		if fixed:
+			if NofContacts > 0:
+				return C+D@wc,fixed_joint_torques
+			else:
+				return C,[]
+
 		if NofContacts > 0:
 			if SA:
 				return C+D@wc,dx_dotdx
 			else:
-				return C+D@wc
+				return C+D@wc,C,D,wc
 		else:
 			if SA:
 				return C,dx_dotdx
 			else:
 				return C
 
-	def simulate(self,total_time,plot = False):
+	def simulate(self,total_time,plot = False, fixed = True):
 		world = self.robot.get_world()
 		vis.add("world",world)
 		vis.show()
 
 		time.sleep(3)
 
-	
-		#iteration_counter = 0
-		
-		u = [[9.92263016, -14.01755778,  -2.91153767, -30.94673869, 10.20010033,-0.22186062, \
-			-11.28179175, -10.12199697,-4.59420828,  -3.32186255, -10.52210806,  -6.23841702],\
-       		[-19.8456911 ,  -6.50670673, -14.23627271,  19.91256801,-11.36196078,  22.90960708,\
-       		29.78007875,   6.52292582, -7.12403885, -39.70527496,  -1.65776911,  38.88391731],\
-       		[-0.71478426,   0.21564621,  -0.15908892,   0.16485356, 0.57802428,   0.36248951,\
-       		0.80722739,   0.11268208,-0.04014665,  -0.99691445,   0.85344531,   0.46476715]]
-
 		simulation_time = 0
+
+		u1 = [6.08309021,0.81523653, 2.53641154, 5.83534863, 0.72158568, 2.59685143,\
+				5.50487329, 0.54710471, 2.57836468 ,5.75260704 ,0.64075017, 2.51792186]
+		u2 = [-33.85296297, -20.91288138, -0.9837711 , -33.41402916, -20.41161062 ,\
+			-0.4201634 , -33.38633294 ,-20.41076484 , -0.44616818 ,-33.82823062,\
+			-20.90921505 , -1.00117092]
 		#while passed_time < total_time:
 		while simulation_time < total_time:
 			vis.lock()
 			# start = time.time()
 			#self.simulateOnce(np.array(u[iteration_counter]))#,iteration_counter)
 			#self.simulateOnce(u[iteration_counter%3])
-			self.simulateOnce([6.08309021,0.81523653, 2.53641154, 5.83534863, 0.72158568, 2.59685143,\
-				5.50487329, 0.54710471, 2.57836468 ,5.75260704 ,0.64075017, 2.51792186],True)
+			self.simulateOnce(u1,continuous_simulation = True, fixed = fixed)
 			simulation_time = simulation_time + self.dt
 			print(simulation_time)
+			print('current q:',self.q)
 			time.sleep(self.dt*10)
 			vis.unlock()
 			#time.sleep(self.dt*1.0)
@@ -353,6 +434,7 @@ class robosimianSimulator:
 			vis.unlock()
 			time.sleep(0.1)
 		vis.kill()
+
 	def _klamptFDRelated(self,C,D,wc,u):
 		initial_q = deepcopy(self.q) #it is a column vector
 		initial_q_dot = deepcopy(self.q_dot)
@@ -450,6 +532,7 @@ class robosimianSimulator:
 
 		#loop through the 4 ankles
 		positions = self.robot.get_ankle_positions()
+
 		for i in range(4):
 			p = positions[i]
 
@@ -473,7 +556,10 @@ class robosimianSimulator:
 				if p[2] >= 0:
 					contact = [p[1],p[2],1,i,0] #the last element doesn't really mean anything, it's from the matlab program...
 				else:
-					contact = [p[1],-p[2],-1,i,0]
+					if not self.augmented:
+						contact = [p[1],-p[2],-1,i,0]
+					else:
+						contact = [p[1],p[2],1,i,0]
 				contacts.append(contact)
 				limb_indices.append(i)
 				NofContacts += 1
@@ -520,19 +606,31 @@ class robosimianSimulator:
 
 if __name__=="__main__":
 
-	q_2D = np.array([0.0,0.936,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
-	  	+[0.6+1.5708,0.0,-0.6])[np.newaxis] #four feet on the ground at the same time 
-	# q_2D = np.array([0.0,0.936,0.0] + [0.6- 1.5708,0.0,-0.6]+[-0.6+1.5708,0.0,0.6]+[0.6-1.5708,0.0,-0.6] \
-	#   	+[-0.6+1.5708,0.0,0.6])[np.newaxis] #symmetric limbs
-
+	q_2D = np.array(configs.q_staggered_limbs)[np.newaxis] #four feet on the ground at the same time 
+	# q_2D = np.array(configs.q_symmetric)[np.newaxis] #symmetric limbs
+	#print(q_2D)
+	q_2D[0,1] = 0.915
 	q_dot_2D = np.array([0.0]*15)[np.newaxis]
 	q_2D = q_2D.T
 	q_dot_2D = q_dot_2D.T
-	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'mpqp')
-	u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
-		5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
+	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'cvxpy',print_level = 1,augmented = True)
+	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
+	# 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
 
-	simulator.simulateOnce(u)
-	#simulator.simulate(1)
+	#simulator.simulateOnce(vo.div(vo.add(configs.u1,configs.u2),2.0))
+	#simulator.simulateOnce(vo.mul(configs.u,1.0))
+	#simulator.simulateOnce(configs.u1)
+	#simulator.simulateOnce(configs.u1)
+	#simulator.simulateOnce(vo.div(vo.add(configs.u1,configs.u),2.0))
+	t = simulator.getStaticTorques(np.array(configs.q_staggered_limbs + [0]*15))
+	print(t)
+	#print(configs.u)
+	np.savetxt('staticTorque1',t)
+	# simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'mpqp')
+	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
+	# 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
+	#pdb.set_trace()
+	# simulator.simulateOnce(u)
+	#simulator.simulate(2, fixed = True)
 	#print(simulator._3D_to_2D(simulator.q_3D),simulator._3D_to_2D(simulator.q_dot_3D))
-	#simulator.debugSimulation()
+	#t = simulator.getStaticTorques(np.array(configs.q_staggered_limbs + [0]*15))

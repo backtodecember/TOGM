@@ -3,13 +3,14 @@ from klampt.math import vectorops as vo
 import numpy as np
 import math
 import pydrake as pd
-#from pydrake.multibody.rigid_body_tree import RigidBodyTree
-#from pydrake.autodiffutils import AutoDiffXd as AD
+from pydrake.attic.multibody.rigid_body_tree import RigidBodyTree
+from pydrake.autodiffutils import AutoDiffXd as AD
 
 class robosimian_drake:
 	def __init__(self,dt = 0.01):
-		path = "data/robosimian_caesar_new_pinocchio.urdf"
-		self.tree = pd.multibody.RigidBodyTree(path)
+		path = "data/robosimian_caesar_new_pinnochio.urdf"
+		self.tree = RigidBodyTree(path)
+
 	def get_world(self):
 		return self.world_all_active
 

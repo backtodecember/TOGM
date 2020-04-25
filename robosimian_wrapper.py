@@ -5,7 +5,7 @@ import numpy as np
 import math
 
 class robosimian:
-	def __init__(self,dt = 0.01):
+	def __init__(self,dt = 0.01,print_level = 0):
 		self.world = WorldModel()
 		####The 2D version has all but 12 joints fixed....
 		self.world.loadElement("data/robosimian_caesar_new_2D.urdf")
@@ -28,7 +28,7 @@ class robosimian:
 		self.ankle_length = 0.15
 		# ####link 7-13 RF; 15-21 RR; 23-29 LR; 31-37 LF
 		self.dt = dt
-		
+		self.print_level = print_level
 		# desired_total_mass = 99.888 #99.888 is the original total mass
 		# total_mass = 0.0
 		# #link_list = [5] + list(range(7,14)) + list(range(15,22)) + list(range(23,30)) + list(range(31,37))
@@ -109,23 +109,6 @@ class robosimian:
 
 		return np.array(q_dot_to_be_set)[np.newaxis].T
 
-
-	def set_q_3D(self,q):
-		q_to_be_set = []
-		for i in range(38):
-			q_to_be_set.append(float(q[i,0]))
-		self.robot_all_active.setConfig(q_to_be_set)
-
-		return
-
-	def set_q_dot_3D(self,q):
-		q_dot_to_be_set = []
-		for i in range(38):
-			q_dot_to_be_set.append(float(q[i,0]))
-		self.robot_all_active.setVelocity(q_dot_to_be_set)
-
-		return
-
 	def get_mass_matrix(self):
 		m_3D = self.robot_all_active.getMassMatrix()
 		m = []
@@ -135,6 +118,123 @@ class robosimian:
 				row.append(m_3D[i][j]) 
 			m.append(row)
 		return m
+
+	
+
+
+	def get_ankle_positions(self):
+		"""return the 2D positions of the 4 ankle sole positions
+
+		returns:
+		------------
+		a 4*3 list
+		"""
+		positions = []
+		if self.print_level == 1:
+			print('current robot q when calculating ankle positions:',self.robot_all_active.getConfig())
+		for i in range(4):
+			p = self.robot_all_active.link(13+i*8).getWorldPosition((0.15,0.0,0.0)) 
+			direction = self.robot_all_active.link(13+i*8).getWorldDirection((-0.15,0.0,0.0))
+			a = math.atan2(direction[0],direction[2])
+			positions.append([p[0],p[2],a])
+
+		return positions
+
+	def get_Jacobians(self):
+		local_pt = (0,0,0)
+		J1 = np.array(self.robot_all_active.link(13).getJacobian(local_pt))
+		J2 = np.array(self.robot_all_active.link(21).getJacobian(local_pt))
+		J3 = np.array(self.robot_all_active.link(29).getJacobian(local_pt))
+		J4 = np.array(self.robot_all_active.link(37).getJacobian(local_pt))
+		J1 = J1[[3,5,1],:] #orientation jacobian is stacked upon position
+		J2 = J2[[3,5,1],:]
+		J3 = J3[[3,5,1],:]
+		J4 = J4[[3,5,1],:]
+		return J1[:,self.joint_indices_3D]
+
+	def compute_CD(self,u,gravity = (0,0,-9.81)):
+		""" Compute the dynamics of the 2D robot, given by matrices C and D.
+		acceleration = C + D*contact_wrench 
+
+		Parameters:
+		------------
+		u a  numpy array
+		
+		Returns:
+		------------
+		C,D: numpy array nx1 2D arrays...
+		"""
+		#debug
+
+		# print('robot config',self.robot_all_active.getConfig())
+		# print('robot velocity',self.robot_all_active.getVelocity())
+
+		u = self.u_2D_to_3D(u) #u is a 1D numpy array
+		B_inv = np.array(self.robot_all_active.getMassMatrixInv())
+		#print('coriolis forces',self.robot_all_active.getCoriolisForces())
+		I = np.eye(38)
+		a_from_u = np.array(self.robot_all_active.accelFromTorques(u))
+		if self.print_level == 1:
+			print('acceleration from u',a_from_u)
+		K = np.subtract(I,np.dot(B_inv,np.dot(self.F.T,np.dot(np.linalg.inv(np.dot(self.F,np.dot(B_inv,self.F.T))),self.F))))
+		G = np.array(self.robot_all_active.getGravityForces(gravity))
+		a = np.dot(K,a_from_u.T)
+		#add coriolis + centrifugal
+		Co = self.robot_all_active.getCoriolisForces()
+		C = a - K@B_inv@(G+Co)
+
+		self._clean_vector(C)
+		J1 = np.array(self.robot_all_active.link(13).getJacobian((0.075,0,0)))
+		J2 = np.array(self.robot_all_active.link(21).getJacobian((0.075,0,0)))
+		J3 = np.array(self.robot_all_active.link(29).getJacobian((0.075,0,0)))
+		J4 = np.array(self.robot_all_active.link(37).getJacobian((0.075,0,0)))
+		J1 = J1[[3,5,1],:] #orientation jacobian is stacked upon position
+		J2 = J2[[3,5,1],:]
+		J3 = J3[[3,5,1],:]
+		J4 = J4[[3,5,1],:]
+		J = np.vstack((J1,np.vstack((J2,np.vstack((J3,J4))))))
+		D = np.dot(K,np.dot(B_inv,J.T))
+
+		C = C[np.newaxis].T
+		return C[self.joint_indices_3D,:],D[self.joint_indices_3D,:]
+
+	def compute_CD_fixed(self,gravity = (0,0,-9.81)):
+
+		B_inv = np.array(self.robot_all_active.getMassMatrixInv())
+		I = np.eye(38)
+		K = np.subtract(I,B_inv@self.F_fixed.T@np.linalg.inv(self.F_fixed@B_inv@self.F_fixed.T)@self.F_fixed)
+		G = np.array(self.robot_all_active.getGravityForces(gravity))
+		Co = self.robot_all_active.getCoriolisForces()
+		C = np.multiply(K@B_inv@(G+Co),-1.0)
+		self._clean_vector(C)
+		J1 = np.array(self.robot_all_active.link(13).getJacobian((0.075,0,0)))
+		J2 = np.array(self.robot_all_active.link(21).getJacobian((0.075,0,0)))
+		J3 = np.array(self.robot_all_active.link(29).getJacobian((0.075,0,0)))
+		J4 = np.array(self.robot_all_active.link(37).getJacobian((0.075,0,0)))
+		J1 = J1[[3,5,1],:] #orientation jacobian is stacked upon position
+		J2 = J2[[3,5,1],:]
+		J3 = J3[[3,5,1],:]
+		J4 = J4[[3,5,1],:]
+		J = np.vstack((J1,np.vstack((J2,np.vstack((J3,J4))))))
+		D = K@B_inv@J.T
+
+		##debug, add the torques for fixed joints
+		L = np.linalg.inv(self.F_fixed@B_inv@self.F_fixed.T)@self.F_fixed@B_inv
+		L_prime = L@(G+Co)
+		L_J = np.multiply(L@J.T,-1.0)
+		C = C[np.newaxis].T
+		return C[self.joint_indices_3D,:],D[self.joint_indices_3D,:],L_prime,L_J
+
+	def compute_Jp(self, contact_list):
+		Jp = np.zeros((12,38))
+		for i in contact_list:
+			Jp[i*3:i*3+3,:] = np.array(self.robot_all_active.link(13+i*8).getJacobian((0.15,0,0)))[[3,5,1],:]
+		return Jp[:,self.joint_indices_3D]
+
+	def _clean_vector(self,a):
+		for i in range(len(a)):
+			if math.fabs(a[i]) < 0.000000001:
+				a[i] = 0.0
 
 	def q_3D_to_2D(self,q):
 		q_2D = []
@@ -190,113 +290,6 @@ class robosimian:
 		for (i,j) in zip(self.revolute_joint_indices_3D,self.revolute_joint_indices_2D):
 			u_3D[i] = u[j]
 		return u_3D
-
-
-	def get_ankle_positions(self):
-		"""return the 2D positions of the 4 ankle sole positions
-
-		returns:
-		------------
-		a 4*3 list
-		"""
-		positions = []
-		for i in range(4):
-			p = self.robot_all_active.link(13+i*8).getWorldPosition((0.15,0.0,0.0)) 
-			direction = self.robot_all_active.link(13+i*8).getWorldDirection((-0.15,0.0,0.0))
-			a = math.atan2(direction[0],direction[2])
-			positions.append([p[0],p[2],a])
-
-		return positions
-
-	def get_Jacobians(self):
-		local_pt = (0,0,0)
-		J1 = np.array(self.robot_all_active.link(13).getJacobian(local_pt))
-		J2 = np.array(self.robot_all_active.link(21).getJacobian(local_pt))
-		J3 = np.array(self.robot_all_active.link(29).getJacobian(local_pt))
-		J4 = np.array(self.robot_all_active.link(37).getJacobian(local_pt))
-		J1 = J1[[3,5,1],:] #orientation jacobian is stacked upon position
-		J2 = J2[[3,5,1],:]
-		J3 = J3[[3,5,1],:]
-		J4 = J4[[3,5,1],:]
-		return J1[:,self.joint_indices_3D]
-
-	def compute_CD(self,u,gravity = (0,0,-9.81)):
-		""" Compute the dynamics of the 2D robot, given by matrices C and D.
-		acceleration = C + D*contact_wrench 
-
-		Parameters:
-		------------
-		u a  numpy array
-		
-		Returns:
-		------------
-		C,D: numpy array nx1 2D arrays...
-		"""
-		u = self.u_2D_to_3D(u) #u is a 1D numpy array
-		B_inv = np.array(self.robot_all_active.getMassMatrixInv())
-		I = np.eye(38)
-		a_from_u = np.array(self.robot_all_active.accelFromTorques(u))
-		K = np.subtract(I,np.dot(B_inv,np.dot(self.F.T,np.dot(np.linalg.inv(np.dot(self.F,np.dot(B_inv,self.F.T))),self.F))))
-		G = np.array(self.robot_all_active.getGravityForces(gravity))
-		a = np.dot(K,a_from_u.T)
-		C = np.subtract(a,np.dot(K,np.dot(B_inv,G)))
-		# print(self.robot_all_active.getConfig())
-		# print(self.robot_all_active.getVelocity())
-		#print('a',C)
-		#print('C',C)
-
-		self._clean_vector(C)
-		J1 = np.array(self.robot_all_active.link(13).getJacobian((0.075,0,0)))
-		J2 = np.array(self.robot_all_active.link(21).getJacobian((0.075,0,0)))
-		J3 = np.array(self.robot_all_active.link(29).getJacobian((0.075,0,0)))
-		J4 = np.array(self.robot_all_active.link(37).getJacobian((0.075,0,0)))
-		J1 = J1[[3,5,1],:] #orientation jacobian is stacked upon position
-		J2 = J2[[3,5,1],:]
-		J3 = J3[[3,5,1],:]
-		J4 = J4[[3,5,1],:]
-		J = np.vstack((J1,np.vstack((J2,np.vstack((J3,J4))))))
-		D = np.dot(K,np.dot(B_inv,J.T))
-
-		C = C[np.newaxis].T
-		return C[self.joint_indices_3D,:],D[self.joint_indices_3D,:]
-
-	def compute_CD_fixed(self,gravity = (0,0,-9.81)):
-
-		B_inv = np.array(self.robot_all_active.getMassMatrixInv())
-		I = np.eye(38)
-		K = np.subtract(I,B_inv@self.F_fixed.T@np.linalg.inv(self.F_fixed@B_inv@self.F_fixed.T)@self.F_fixed)
-		G = np.array(self.robot_all_active.getGravityForces(gravity))
-		C = np.multiply(K@B_inv@G,-1.0)
-		self._clean_vector(C)
-		J1 = np.array(self.robot_all_active.link(13).getJacobian((0.075,0,0)))
-		J2 = np.array(self.robot_all_active.link(21).getJacobian((0.075,0,0)))
-		J3 = np.array(self.robot_all_active.link(29).getJacobian((0.075,0,0)))
-		J4 = np.array(self.robot_all_active.link(37).getJacobian((0.075,0,0)))
-		J1 = J1[[3,5,1],:] #orientation jacobian is stacked upon position
-		J2 = J2[[3,5,1],:]
-		J3 = J3[[3,5,1],:]
-		J4 = J4[[3,5,1],:]
-		J = np.vstack((J1,np.vstack((J2,np.vstack((J3,J4))))))
-		D = K@B_inv@J.T
-
-		##debug, add the torques for fixed joints
-		L = np.linalg.inv(self.F_fixed@B_inv@self.F_fixed.T)@self.F_fixed@B_inv
-		L_prime = L@G
-		L_J = np.multiply(L@J.T,-1.0)
-		C = C[np.newaxis].T
-		return C[self.joint_indices_3D,:],D[self.joint_indices_3D,:],L_prime,L_J
-
-	def compute_Jp(self, contact_list):
-		Jp = np.zeros((12,38))
-		for i in contact_list:
-			Jp[i*3:i*3+3,:] = np.array(self.robot_all_active.link(13+i*8).getJacobian((0.15,0,0)))[[3,5,1],:]
-		return Jp[:,self.joint_indices_3D]
-
-	def _clean_vector(self,a):
-		for i in range(len(a)):
-			if math.fabs(a[i]) < 0.000000001:
-				a[i] = 0.0
-
 
 
 if __name__=="__main__":

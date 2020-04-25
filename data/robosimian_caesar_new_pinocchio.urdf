@@ -1,4 +1,28 @@
 <robot name="robosimian_caesar">
+  <link name="virtual0">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0" />
+    </inertial>
+  </link>
+
+  <link name="virtual1">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0" />
+    </inertial>
+  </link>
+
+  <link name="virtual2">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0" />
+    </inertial>
+  </link>
+
    <link name="torso">
       <inertial>
         <mass value="40.000000" />
@@ -225,7 +249,7 @@
       <visual>
         <origin xyz="0.000000 0 0" rpy="0 0 0" />
         <geometry>
-           <mesh filename="stl_0_3/ankle_mm.STL" scale="0.001 0.001 0.001" />
+           <mesh filename="stl_0_3/top_limb.stl" scale="0.001 0.001 0.001" />
         </geometry>
       </visual>
       <collision group="default">
@@ -238,7 +262,33 @@
 
 
 
-   <joint name="limb1_joint0" type="revolute">
+
+    <joint name="torso_x" type="prismatic">
+      <origin xyz="0.0 0.0 0.0"  rpy="0.00000 -0.00000 0.00000" />
+      <axis xyz="1 0 0" />
+      <parent link="virtual0" />
+      <child link="virtual1" />
+      <limit effort="100000.0" lower="-1000" upper="1000" velocity="0"/>
+   </joint>
+
+      <joint name="torso_z" type="prismatic">
+      <origin xyz="0.0 0.0 0.0"  rpy="0.00000 -0.00000 0.00000" />
+      <axis xyz="0 0 1" />
+      <parent link="virtual1" />
+      <child link="virtual2" />
+      <limit effort="100000.0" lower="-1000" upper="1000" velocity="0"/>
+   </joint>
+
+
+   <joint name="torso_a" type="revolute">
+      <origin xyz="0.0 0.0 0.0"  rpy="0.00000 -0.00000 0.00000" />
+      <axis xyz="0 1 0" />
+      <parent link="virtual2" />
+      <child link="torso" />
+      <limit effort="1000.0" lower="-3" upper="3" velocity="100"/>
+   </joint>
+
+   <joint name="limb1_joint0" type="fixed">
       <origin xyz="0.29326 -0.20940 -0.03650"  rpy="0.00000 1.57080 3.1515926" />
       <parent link="torso" />
       <child link="limb1_link0" />
@@ -247,13 +297,13 @@
       <dynamics damping="0" friction="0"/>
    </joint>
 
-   <joint name="limb1_joint1" type="revolute">
+   <joint name="limb1_joint1" type="fixed">
       <origin xyz="0.17203 0.00000 0.00000"  rpy="3.14159 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb1_link0" />
       <child link="limb1_link1" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb1_joint2" type="revolute">
@@ -262,16 +312,16 @@
       <parent link="limb1_link1" />
       <child link="limb1_link2" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
-   <joint name="limb1_joint3" type="revolute">
+   <joint name="limb1_joint3" type="fixed">
       <origin xyz="0.28650 -0.11700 0.00000"  rpy="0.00000 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb1_link2" />
       <child link="limb1_link3" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb1_joint4" type="revolute">
@@ -280,16 +330,16 @@
       <parent link="limb1_link3" />
       <child link="limb1_link4" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
-   <joint name="limb1_joint5" type="revolute">
+   <joint name="limb1_joint5" type="fixed">
       <origin xyz="0.28650 -0.11700 0.00000"  rpy="0.00000 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb1_link4" />
       <child link="limb1_link5" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb1_joint6" type="revolute">
@@ -298,7 +348,7 @@
       <parent link="limb1_link5" />
       <child link="limb1_link6" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb1_joint7" type="revolute">
@@ -306,8 +356,8 @@
       <axis xyz="1 0 0" />
       <parent link="limb1_link6" />
       <child link="limb1_link7" />
-      <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <limit effort="0.0" lower="0" upper="0" velocity="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
 
@@ -485,7 +535,7 @@
       <visual>
         <origin xyz="0.000000 0 0" rpy="0 0 0" />
         <geometry>
-           <mesh filename="stl_0_3/ankle_mm.STL" scale="0.001 0.001 0.001" />
+           <mesh filename="stl_0_3/bottom_limb.stl" scale="0.001 0.001 0.001" />
         </geometry>
       </visual>
       <collision group="default">
@@ -497,7 +547,7 @@
    </link>
 
 
-   <joint name="limb2_joint0" type="revolute">
+   <joint name="limb2_joint0" type="fixed">
       <origin xyz="-0.29326 -0.20940 -0.03650"  rpy="0.00000 1.57080 3.1515926" />
       <parent link="torso" />
       <child link="limb2_link0" />
@@ -506,13 +556,13 @@
       <dynamics damping="0" friction="0"/>
    </joint>
 
-   <joint name="limb2_joint1" type="revolute">
+   <joint name="limb2_joint1" type="fixed">
       <origin xyz="0.17203 0.00000 0.00000"  rpy="3.14159 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb2_link0" />
       <child link="limb2_link1" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb2_joint2" type="revolute">
@@ -521,16 +571,16 @@
       <parent link="limb2_link1" />
       <child link="limb2_link2" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
-   <joint name="limb2_joint3" type="revolute">
+   <joint name="limb2_joint3" type="fixed">
       <origin xyz="0.28650 -0.11700 0.00000"  rpy="0.00000 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb2_link2" />
       <child link="limb2_link3" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb2_joint4" type="revolute">
@@ -539,16 +589,16 @@
       <parent link="limb2_link3" />
       <child link="limb2_link4" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
-   <joint name="limb2_joint5" type="revolute">
+   <joint name="limb2_joint5" type="fixed">
       <origin xyz="0.28650 -0.11700 0.00000"  rpy="0.00000 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb2_link4" />
       <child link="limb2_link5" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb2_joint6" type="revolute">
@@ -557,7 +607,7 @@
       <parent link="limb2_link5" />
       <child link="limb2_link6" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb2_joint7" type="revolute">
@@ -565,8 +615,8 @@
       <axis xyz="1 0 0" />
       <parent link="limb2_link6" />
       <child link="limb2_link7" />
-      <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <limit effort="0.0" lower="0" upper="0" velocity="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
 
@@ -745,7 +795,7 @@
       <visual>
         <origin xyz="0.000000 0 0" rpy="0 0 0" />
         <geometry>
-           <mesh filename="stl_0_3/ankle_mm.STL" scale="0.001 0.001 0.001" />
+           <mesh filename="stl_0_3/bottom_limb.stl" scale="0.001 0.001 0.001" />
         </geometry>
       </visual>
       <collision group="default">
@@ -757,7 +807,7 @@
    </link>
 
 
-   <joint name="limb3_joint0" type="revolute">
+   <joint name="limb3_joint0" type="fixed">
       <origin xyz="-0.29326 0.20940 -0.03650"  rpy="0.00000 1.57080 0" />
       <parent link="torso" />
       <child link="limb3_link0" />
@@ -766,13 +816,13 @@
       <dynamics damping="0" friction="0"/>
    </joint>
 
-   <joint name="limb3_joint1" type="revolute">
+   <joint name="limb3_joint1" type="fixed">
       <origin xyz="0.17203 0.00000 0.00000"  rpy="3.14159 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb3_link0" />
       <child link="limb3_link1" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0.000000"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb3_joint2" type="revolute">
@@ -781,16 +831,16 @@
       <parent link="limb3_link1" />
       <child link="limb3_link2" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0.000000" friction="0.000000"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
-   <joint name="limb3_joint3" type="revolute">
+   <joint name="limb3_joint3" type="fixed">
       <origin xyz="0.28650 -0.11700 0.00000"  rpy="0.00000 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb3_link2" />
       <child link="limb3_link3" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0.000000"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb3_joint4" type="revolute">
@@ -799,16 +849,16 @@
       <parent link="limb3_link3" />
       <child link="limb3_link4" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
-   <joint name="limb3_joint5" type="revolute">
+   <joint name="limb3_joint5" type="fixed">
       <origin xyz="0.28650 -0.11700 0.00000"  rpy="0.00000 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb3_link4" />
       <child link="limb3_link5" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb3_joint6" type="revolute">
@@ -817,7 +867,7 @@
       <parent link="limb3_link5" />
       <child link="limb3_link6" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb3_joint7" type="revolute">
@@ -825,8 +875,8 @@
       <axis xyz="1 0 0" />
       <parent link="limb3_link6" />
       <child link="limb3_link7" />
-      <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <limit effort="0.0" lower="0" upper="0" velocity="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
 
@@ -999,7 +1049,7 @@
       <visual>
         <origin xyz="0.000000 0 0" rpy="0 0 0" />
         <geometry>
-           <mesh filename="stl_0_3/ankle_mm.STL" scale="0.001 0.001 0.001" />
+           <mesh filename="stl_0_3/top_limb.stl" scale="0.001 0.001 0.001" />
         </geometry>
       </visual>
       <collision group="default">
@@ -1011,7 +1061,7 @@
    </link>
 
 
-   <joint name="limb4_joint0" type="revolute">
+   <joint name="limb4_joint0" type="fixed">
       <origin xyz="0.29326 0.20940 -0.03650"  rpy="0.00000 1.57080 0" />
       <parent link="torso" />
       <child link="limb4_link0" />
@@ -1020,7 +1070,7 @@
       <dynamics damping="0" friction="0"/>
    </joint>
 
-   <joint name="limb4_joint1" type="revolute">
+   <joint name="limb4_joint1" type="fixed">
       <origin xyz="0.17203 0.00000 0.00000"  rpy="3.14159 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb4_link0" />
@@ -1035,16 +1085,16 @@
       <parent link="limb4_link1" />
       <child link="limb4_link2" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
-   <joint name="limb4_joint3" type="revolute">
+   <joint name="limb4_joint3" type="fixed">
       <origin xyz="0.28650 -0.11700 0.00000"  rpy="0.00000 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb4_link2" />
       <child link="limb4_link3" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb4_joint4" type="revolute">
@@ -1053,16 +1103,16 @@
       <parent link="limb4_link3" />
       <child link="limb4_link4" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
-   <joint name="limb4_joint5" type="revolute">
+   <joint name="limb4_joint5" type="fixed">
       <origin xyz="0.28650 -0.11700 0.00000"  rpy="0.00000 -0.00000 0.00000" />
       <axis xyz="1 0 0" />
       <parent link="limb4_link4" />
       <child link="limb4_link5" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
    <joint name="limb4_joint6" type="revolute">
@@ -1071,7 +1121,7 @@
       <parent link="limb4_link5" />
       <child link="limb4_link6" />
       <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
 
 
@@ -1080,16 +1130,8 @@
       <axis xyz="1 0 0" />
       <parent link="limb4_link6" />
       <child link="limb4_link7" />
-      <limit effort="1000.0" lower="-3.1415" upper="3.1415" velocity="0.5"/>
-      <dynamics damping="0" friction="0"/>
+      <limit effort="0.0" lower="0" upper="0" velocity="0"/>
+      <dynamics damping="1.000000" friction="10.000000"/>
    </joint>
-
-
-
-
-
-
-  <klampt package_root="../.." flip_yz="0" use_vis_geom="1" >
-  </klampt>
 
 </robot>

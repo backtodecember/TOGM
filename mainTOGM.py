@@ -12,6 +12,7 @@ from trajoptlib.utility import show_sol
 from scipy.sparse import coo_matrix
 import math
 from robosimian_GM_simulation import robosimianSimulator
+import pdb
 class Robosimian(System):
 	def __init__(self):
 		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
@@ -25,49 +26,52 @@ class Robosimian(System):
 		return np.concatenate([x[15:30],a]) #1D numpy array
 
 
-	# def jac_dyn(self, t, x, u, p=None):
+	def jac_dyn(self, t, x, u, p=None):
 
-	# 	a,J_tmp = self.robot.getDynJac(x,u)
-	# 	a = np.concatenate([x[15:30],np.ravel(a)])		
-	# 	J = np.zeros((30,1+30+12))
-	# 	J[:,1:43] = J_tmp
-	# 	return a,J
+		a,J_tmp = self.robot.getDynJac(x,u)
+		a = np.concatenate([x[15:30],np.ravel(a)])		
+		J = np.zeros((30,1+30+12))
+		J[:,1:43] = J_tmp
+		return a,J
 
 	###older version that uses naive FD for dynamics
-	def jac_dyn(self, t, x, u, p=None):
-		a = np.ravel(self.robot.getDyn(x,u))
-		a = np.concatenate([x[15:30],a])		
+	# def jac_dyn(self, t, x, u, p=None):
+	# 	a = np.ravel(self.robot.getDyn(x,u))
+	# 	a = np.concatenate([x[15:30],a])		
 
-		#Forward Finite Difference to get the 
-		eps = 1e-4
-		J = np.zeros((30,1+30+12))
-		for i in range(30):
-			FD_vector = np.zeros(30)
-			FD_vector[i] = eps
-			tmp_x = np.add(x,FD_vector)
-			tmp_a = self.robot.getDyn(tmp_x,u)
-			J[:,i+1] = np.multiply(np.subtract(np.concatenate([tmp_x[15:30],np.ravel(tmp_a)]),a),1.0/eps)
-		for i in range(12):
-			FD_vector = np.zeros(12)
-			FD_vector[i] = eps
-			tmp_u = np.add(u,FD_vector)
-			tmp_a = self.robot.getDyn(x,tmp_u)
-			J[:,i+1+30] = np.multiply(np.subtract(np.concatenate([x[15:30],np.ravel(tmp_a)]),a),1.0/eps)
-		#print("Jac done")
-		#maybe convert J to coomatrix
-		return a,J
+	# 	#Forward Finite Difference to get the 
+	# 	eps = 1e-4
+	# 	J = np.zeros((30,1+30+12))
+	# 	for i in range(30):
+	# 		FD_vector = np.zeros(30)
+	# 		FD_vector[i] = eps
+	# 		tmp_x = np.add(x,FD_vector)
+	# 		tmp_a = self.robot.getDyn(tmp_x,u)
+	# 		J[:,i+1] = np.multiply(np.subtract(np.concatenate([tmp_x[15:30],np.ravel(tmp_a)]),a),1.0/eps)
+	# 	for i in range(12):
+	# 		FD_vector = np.zeros(12)
+	# 		FD_vector[i] = eps
+	# 		tmp_u = np.add(u,FD_vector)
+	# 		tmp_a = self.robot.getDyn(x,tmp_u)
+	# 		J[:,i+1+30] = np.multiply(np.subtract(np.concatenate([x[15:30],np.ravel(tmp_a)]),a),1.0/eps)
+	# 	#print("Jac done")
+	# 	#maybe convert J to coomatrix
+	# 	return a,J
+
+single_u_guess = [6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
+	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186]
 
 
 sys = Robosimian()
-N = 3
+N = 40
 t0 = 0.0
-tf = 0.01
+tf = 0.2
 #This uses direct transcription
 problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 # penetrationConstr = penetrationConstraint(30)
 # problem.add_constr(penetrationConstr,path = True)
 R = np.array([1.0]*12)
-cost = LqrObj(R = R)
+cost = LqrObj(R = R,ubase = np.array(single_u_guess))
 problem.xbd = [np.array([-0.5,0.85,-1,-1.57-0.7,-0.7,-0.7,1.57-0.7,-0.7,-0.7,-1.57-0.7,-0.7,-0.7,1.57-0.7,-0.7,-0.7] + [-2]*15),\
 	np.array([0.5,1.2,1,-1.57+1,0.7,0.7,1.57+1,0.7,0.7,-1.57+0.7,0.7,0.7,1.57+1,0.7,0.7] + [2]*15)]
 problem.ubd = [np.array([-1000]*12),np.array([1000]*12)]
@@ -85,9 +89,8 @@ slv = OptSolver(problem, cfg)
 startTime = time.time()
 
 #These are the force and torque that could support the robot in place.
-  ngle_traj_guess = [0,0.936,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15
-single_u_guess = [6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
-	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186]
+single_traj_guess = [0,0.936,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15
+
 traj_guess = []
 u_guess = []
 for i in range(N):
@@ -95,6 +98,10 @@ for i in range(N):
 	u_guess.append(single_u_guess)
 
 guess = problem.genGuessFromTraj(X= np.array(traj_guess), U=np.array(u_guess), t0 = 0, tf = tf)
+
+result = problem.parseF(guess)
+#print(result)
+#pdb.set_trace()
 #print(guess)
 rst = slv.solve_guess(guess)
 
