@@ -174,8 +174,6 @@ class robosimian:
 		#print('coriolis forces',self.robot_all_active.getCoriolisForces())
 		I = np.eye(38)
 		a_from_u = np.array(self.robot_all_active.accelFromTorques(u))
-		if self.print_level == 1:
-			print('acceleration from u',a_from_u)
 		K = np.subtract(I,np.dot(B_inv,np.dot(self.F.T,np.dot(np.linalg.inv(np.dot(self.F,np.dot(B_inv,self.F.T))),self.F))))
 		G = np.array(self.robot_all_active.getGravityForces(gravity))
 		a = np.dot(K,a_from_u.T)

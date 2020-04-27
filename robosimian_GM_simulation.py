@@ -185,9 +185,9 @@ class robosimianSimulator:
 				self.b2.value = b2
 
 				#start_time = time.time()
-				#mosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
-				#self.prob.solve(solver=cp.MOSEK,mosek_params = mosek_param,verbose = True,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
-				self.prob.solve(solver=cp.ECOS,verbose = False,warm_start = False,abstol = 1e-12,reltol = 1e-12)				
+				mosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
+				self.prob.solve(solver=cp.MOSEK,mosek_params = mosek_param,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
+				#self.prob.solve(solver=cp.ECOS,verbose = False,warm_start = False,abstol = 1e-12,reltol = 1e-12)				
 				#self.prob.solve(solver=cp.OSQP,verbose = False,warm_start = False)#,eps_abs = 1e-12,eps_rel = 1e-12,max_iter = 10000000)
 				#self.prob.solve(verbose = False,warm_start = True)
 				#print(self.constraints[2].dual_value)
@@ -200,11 +200,10 @@ class robosimianSimulator:
 					print(C + D@x_k)
 					print('objective value',(self.C.value+self.D.value@self.x.value[0:12]).T@self.M.value@(self.C.value+self.D.value@self.x.value[0:12]))
 				#print(C,D)
-				v_k_1 = self.C.value+D@wc*self.dt
+				#v_k_1 = self.C.value+D@wc*self.dt
 
 				#print('objectove value:',v_k_1.T@self.M.value@v_k_1)
 				# print('lambdas',self.x.value[12:12+26])
-				print("cvxpy status:", self.prob.status)
 				if not self.prob.status == "optimal":
 					print("cvxpy status:", self.prob.status)
 			
@@ -330,7 +329,7 @@ class robosimianSimulator:
 				print('ground reaction force',A@w2)
 
 				
-				v_k_1 = self.q_dot + C + D@A@w2
+				#v_k_1 = self.q_dot + C + D@A@w2
 				#print('objectove value:',v_k_1.T@M@v_k_1)
 				wc = A@w2
 				if continuous_simulation:
@@ -536,33 +535,30 @@ class robosimianSimulator:
 		for i in range(4):
 			p = positions[i]
 
-			##instead of terminating, just return the wrench space at the boundary		
-			# if p[1] < self.terrain.material_range[0] or math.fabs(p[2]) > self.terrain.material_range[1]:
-			# 	print('One of more ankles are penetrating the terrain outside of database range')
-			# 	return
-			flag = False 
-			if p[1] < self.terrain.material_range[0]:
-				#p[1] = self.terrain.material_range[0]
-				flag= True
-			if p[2] > self.terrain.material_range[1]:
-				#p[2] = self.terrain.material_range[1]
-				flag = True
-			if p[2] <  -self.terrain.material_range[1]:
-				#p[2] = -self.terrain.material_range[1]
-				flag = True
+			# flag = False 
+			# if p[1] < self.terrain.material_range[0]:
+			# 	#p[1] = self.terrain.material_range[0]
+			# 	flag= True
+			# if p[2] > self.terrain.material_range[1]:
+			# 	#p[2] = self.terrain.material_range[1]
+			# 	flag = True
+			# if p[2] <  -self.terrain.material_range[1]:
+			# 	#p[2] = -self.terrain.material_range[1]
+			# 	flag = True
 			# if flag:
 			# 	print('One of more ankles are penetrating the terrain outside of database range,using extrapolation')
-			if p[1] <= 0:
-				if p[2] >= 0:
-					contact = [p[1],p[2],1,i,0] #the last element doesn't really mean anything, it's from the matlab program...
+			#if p[1] <= 0:
+			#even of not contact, still give a contact force 
+			if p[2] >= 0:
+				contact = [p[1],p[2],1,i,0] #the last element doesn't really mean anything, it's from the matlab program...
+			else:
+				if not self.augmented:
+					contact = [p[1],-p[2],-1,i,0]
 				else:
-					if not self.augmented:
-						contact = [p[1],-p[2],-1,i,0]
-					else:
-						contact = [p[1],p[2],1,i,0]
-				contacts.append(contact)
-				limb_indices.append(i)
-				NofContacts += 1
+					contact = [p[1],p[2],1,i,0]
+			contacts.append(contact)
+			limb_indices.append(i)
+			NofContacts += 1
 		#print(contacts)
 		return contacts,NofContacts,limb_indices
 
@@ -606,31 +602,29 @@ class robosimianSimulator:
 
 if __name__=="__main__":
 
-	q_2D = np.array(configs.q_staggered_limbs)[np.newaxis] #four feet on the ground at the same time 
+	q_2D = np.array(configs.q_staggered_augmented)[np.newaxis] #four feet on the ground at the same time
 	# q_2D = np.array(configs.q_symmetric)[np.newaxis] #symmetric limbs
 	#print(q_2D)
-	q_2D[0,1] = 0.915
+	q_2D[0,3] = q_2D[0,3] + 0.5
 	q_dot_2D = np.array([0.0]*15)[np.newaxis]
+
+
+
 	q_2D = q_2D.T
 	q_dot_2D = q_dot_2D.T
 	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'cvxpy',print_level = 1,augmented = True)
 	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
 	# 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
 
-	#simulator.simulateOnce(vo.div(vo.add(configs.u1,configs.u2),2.0))
-	#simulator.simulateOnce(vo.mul(configs.u,1.0))
+
 	#simulator.simulateOnce(configs.u1)
-	#simulator.simulateOnce(configs.u1)
-	#simulator.simulateOnce(vo.div(vo.add(configs.u1,configs.u),2.0))
-	t = simulator.getStaticTorques(np.array(configs.q_staggered_limbs + [0]*15))
-	print(t)
-	#print(configs.u)
-	np.savetxt('staticTorque1',t)
-	# simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'mpqp')
-	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
-	# 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
-	#pdb.set_trace()
-	# simulator.simulateOnce(u)
-	#simulator.simulate(2, fixed = True)
-	#print(simulator._3D_to_2D(simulator.q_3D),simulator._3D_to_2D(simulator.q_dot_3D))
 	#t = simulator.getStaticTorques(np.array(configs.q_staggered_limbs + [0]*15))
+	#print(t)
+	#print(configs.u)
+	#np.savetxt('staticTorque1',t)
+	#simulator.simulate(2, fixed = True)
+	#simulator.debugSimulation()
+	Q = np.array(configs.q_staggered_augmented + [0]*15)
+	Q[3] = Q[3] + 0.5
+	U = np.array(configs.u_augmented_mosek)
+	a,j = simulator.getDynJac(Q, U)

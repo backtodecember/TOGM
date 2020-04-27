@@ -20,12 +20,17 @@ class granularMedia:
 			self.Nvel = D['Nvel'][0][0][0][0]
 
 			self.material_range = [-0.07,0.9]
-			self.W = np.load('data/sandPolyevenWAugmented.npy')
+			#self.W = np.load('data/sandPolyevenWAugmented.npy') #this one does not have the zeros
+			self.W = np.load('data/sandPolyevenWAugmented2.npy')
 			self.func = 4 #polyeven
 			self.eta = 2
 
-			self.theta = np.load('data/sandPolyevenThetaAugmented.npy')
-			self.Ntheta = 33
+			#self.theta = np.load('data/sandPolyevenThetaAugmented.npy')
+			#self.Ntheta = 33
+			#self.scale = 17.0
+			self.scale = 5.0
+			self.theta = np.load('data/sandPolyevenThetaAugmented2.npy')
+			self.Ntheta = 168
 		else:
 			if material == "sand":
 				mat_contents = sio.loadmat('data/data&weightsSand.mat')
@@ -236,7 +241,7 @@ class granularMedia:
 
 	def _RBF(self,theta1,theta2,eta,func):
 		#perform scaling here:
-		scale = 17.0
+		scale = self.scale #17.0
 		_theta1 = [theta1[0]*scale,theta1[1]]
 		_theta2 = [theta2[0]*scale,theta2[1]]
 		##func is 0 ....
