@@ -5,7 +5,7 @@ import numpy as np
 import math
 
 class robosimian:
-	def __init__(self,dt = 0.01,print_level = 0):
+	def __init__(self,dt = 0.01,print_level = 0, RL = False):
 		self.world = WorldModel()
 		####The 2D version has all but 12 joints fixed....
 		self.world.loadElement("data/robosimian_caesar_new_2D.urdf")
@@ -29,19 +29,21 @@ class robosimian:
 		# ####link 7-13 RF; 15-21 RR; 23-29 LR; 31-37 LF
 		self.dt = dt
 		self.print_level = print_level
-		# desired_total_mass = 99.888 #99.888 is the original total mass
-		# total_mass = 0.0
-		# #link_list = [5] + list(range(7,14)) + list(range(15,22)) + list(range(23,30)) + list(range(31,37))
 
-		# for i in range(self.N_of_joints_3D):
-		# 	total_mass +=self.robot_all_active.link(i).getMass().getMass()
-		# for i in range(self.N_of_joints_3D):
-		# 	#print('---------')
-		# 	#print(robot.link(i).getMass().getMass())
-		# 	mass_to_be_set = self.robot_all_active.link(i).getMass().getMass() * desired_total_mass/total_mass
-		# 	mass_structure = self.robot_all_active.link(i).getMass()
-		# 	mass_structure.setMass(mass_to_be_set)
-		# 	self.robot_all_active.link(i).setMass(mass_structure)
+
+		desired_total_mass = 99.888 #99.888 is the original total mass
+		total_mass = 0.0
+		#link_list = [5] + list(range(7,14)) + list(range(15,22)) + list(range(23,30)) + list(range(31,37))
+
+		for i in range(self.N_of_joints_3D):
+			total_mass +=self.robot_all_active.link(i).getMass().getMass()
+		for i in range(self.N_of_joints_3D):
+			#print('---------')
+			#print(robot.link(i).getMass().getMass())
+			mass_to_be_set = self.robot_all_active.link(i).getMass().getMass() * desired_total_mass/total_mass
+			mass_structure = self.robot_all_active.link(i).getMass()
+			mass_structure.setMass(mass_to_be_set)
+			self.robot_all_active.link(i).setMass(mass_structure)
 
 		self.F = np.zeros((23,38)) # selection matrix
 		for i in range(len(self.fixed_joint_indicies)):			
@@ -173,6 +175,7 @@ class robosimian:
 		B_inv = np.array(self.robot_all_active.getMassMatrixInv())
 		#print('coriolis forces',self.robot_all_active.getCoriolisForces())
 		I = np.eye(38)
+
 		a_from_u = np.array(self.robot_all_active.accelFromTorques(u))
 		K = np.subtract(I,np.dot(B_inv,np.dot(self.F.T,np.dot(np.linalg.inv(np.dot(self.F,np.dot(B_inv,self.F.T))),self.F))))
 		G = np.array(self.robot_all_active.getGravityForces(gravity))
@@ -284,7 +287,7 @@ class robosimian:
 		-----------------
 		U is a numpy array
 		"""
-		u_3D = [0]*self.N_of_joints_3D
+		u_3D = [0.0]*self.N_of_joints_3D
 		for (i,j) in zip(self.revolute_joint_indices_3D,self.revolute_joint_indices_2D):
 			u_3D[i] = u[j]
 		return u_3D

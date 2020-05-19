@@ -20,9 +20,10 @@ import configs
 import pdb
 import mosek
 class robosimianSimulator:
-	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01, solver = 'cvxpy',print_level = 0, augmented = False):
+	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01, solver = 'cvxpy',print_level = 0, \
+		augmented = True, RL = False):
 
-		self.robot = robosimian(print_level = print_level)
+		self.robot = robosimian(print_level = print_level, RL = RL)
 		self.q = q
 		self.q_dot = q_dot
 		self.print_level = print_level
@@ -38,6 +39,9 @@ class robosimianSimulator:
 		self.augmented = augmented
 		self.robot.set_q_2D(self.q)
 		self.robot.set_q_dot_2D(self.q_dot)
+		self.RL = RL
+		if self.RL:
+			self.ankle_poses = np.zeros((8,1))
 		#set up M1, which is used for scaling inertia w.r.t. granular media inertia during optimization
 		#self.compute_pool = mp.Pool(4)
 		ankle_density = 800
@@ -135,7 +139,19 @@ class robosimianSimulator:
 		a,t = self.simulateOnce(u, fixed = True)
 		return t
 
+	def simulateOnceRL(self,u):
+		_ = self.simulateOnce(u,True,False,False)
+
+		return np.vstack((self.q,self.q_dot,self.ankle_poses))
+
 	def simulateOnce(self,u,continuous_simulation = False, SA = False, fixed = False):#debug,counter):
+
+		##add viscious friction
+		if self.RL:
+			u_friction = []
+			for i in range(12):
+				u_friction.append(-configs.k_v*self.q_dot[i+3,0]**2)
+			u_friction = np.array(u_friction)
 		contacts,NofContacts,limb_indices = self.generateContacts()
 		if self.print_level == 1:
 			print('contacts',contacts)
@@ -148,7 +164,11 @@ class robosimianSimulator:
 		if fixed:
 			C,D,L_prime,L_J = self.robot.compute_CD_fixed()
 		else:
-			C, D = self.robot.compute_CD(u)
+			if self.RL:
+				C, D = self.robot.compute_CD(u+u_friction)
+
+			else:
+				C, D = self.robot.compute_CD(u)
 		
 		if self.print_level == 1:
 			print('C:')
@@ -185,8 +205,18 @@ class robosimianSimulator:
 				self.b2.value = b2
 
 				#start_time = time.time()
-				mosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
-				self.prob.solve(solver=cp.MOSEK,mosek_params = mosek_param,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
+				#
+				# print('control:',u)
+				# print('state q:',self.q)
+				# print('state q dot:',self.q_dot)
+
+
+				#mosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
+				#self.prob.solve(solver=cp.MOSEK,mosek_params = mosek_param,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
+				
+				self.prob.solve(solver=cp.MOSEK,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
+				
+
 				#self.prob.solve(solver=cp.ECOS,verbose = False,warm_start = False,abstol = 1e-12,reltol = 1e-12)				
 				#self.prob.solve(solver=cp.OSQP,verbose = False,warm_start = False)#,eps_abs = 1e-12,eps_rel = 1e-12,max_iter = 10000000)
 				#self.prob.solve(verbose = False,warm_start = True)
@@ -194,6 +224,10 @@ class robosimianSimulator:
 				#print('time:',time.time() - start_time)
 				x_k = self.x.value[0:12]
 				wc = x_k
+
+				print('ground reaction force',x_k)
+				print('ankle poses:',self.ankle_poses)
+
 				if self.print_level == 1:
 					print('ground reaction force',x_k)
 					print('acceleration')
@@ -353,9 +387,12 @@ class robosimianSimulator:
 			if self.print_level == 1:
 				print('current q:',self.q)
 
+			if self.RL:
+				self.q = self._check_q_bounds(self.q)
+				self.q_dot = self._check_q_dot_bounds(self.q_dot)
 
-		self.robot.set_q_2D(self.q)
-		self.robot.set_q_dot_2D(self.q_dot)
+			self.robot.set_q_2D(self.q)
+			self.robot.set_q_dot_2D(self.q_dot)
 
 
 		#################################################################
@@ -419,7 +456,11 @@ class robosimianSimulator:
 
 
 		
+	def getWorld(self):
+		return self.robot.get_world()
 
+	def getRobot(self):
+		return self.robot
 
 	def debugSimulation(self):
 		world = self.robot.get_world()
@@ -433,7 +474,18 @@ class robosimianSimulator:
 			vis.unlock()
 			time.sleep(0.1)
 		vis.kill()
+	def reset(self,q,q_dot):
+		"""
+		Parameters:
+		numpy 1D array
+		"""
+		self.q= q[np.newaxis].T
+		self.q_dot = q_dot[np.newaxis].T
+		self.robot.set_q_2D_(q)
+		self.robot.set_q_dot_2D_(q_dot)
+		_ = self.generateContacts()
 
+		return np.concatenate((q,q_dot,np.ravel(self.ankle_poses)))
 	def _klamptFDRelated(self,C,D,wc,u):
 		initial_q = deepcopy(self.q) #it is a column vector
 		initial_q_dot = deepcopy(self.q_dot)
@@ -534,7 +586,9 @@ class robosimianSimulator:
 
 		for i in range(4):
 			p = positions[i]
-
+			if self.RL:
+				self.ankle_poses[i*2,0] = p[1]
+				self.ankle_poses[i*2+1,0] = p[2]
 			# flag = False 
 			# if p[1] < self.terrain.material_range[0]:
 			# 	#p[1] = self.terrain.material_range[0]
@@ -556,9 +610,15 @@ class robosimianSimulator:
 					contact = [p[1],-p[2],-1,i,0]
 				else:
 					contact = [p[1],p[2],1,i,0]
-			contacts.append(contact)
-			limb_indices.append(i)
-			NofContacts += 1
+			if self.augmented:
+				contacts.append(contact)
+				limb_indices.append(i)
+				NofContacts += 1
+			else:
+				if p[1] <= 0:
+					contacts.append(contact)
+					limb_indices.append(i)
+					NofContacts += 1
 		#print(contacts)
 		return contacts,NofContacts,limb_indices
 
@@ -600,12 +660,38 @@ class robosimianSimulator:
 		for i in self.fixed_joint_indicies:
 			x[i] = 0.0
 
+	def _check_q_bounds(self,q):
+		q_clamp = np.zeros((15,1))
+		for i in range(15):
+			if q[i,0] > configs.q_high[i]:
+				q_clamp[i,0] = configs.q_high[i]
+			elif  q[i,0] < configs.q_low[i]:
+				q_clamp[i,0] = configs.q_low[i]
+			else:
+				q_clamp[i,0] = q[i,0]
+
+		return q_clamp
+
+	def _check_q_dot_bounds(self,q):
+		q_clamp = np.zeros((15,1))
+		for i in range(15):
+			if q[i,0] > configs.q_dot_high[i]:
+				q_clamp[i,0] = configs.q_dot_high[i]
+			elif  q[i,0] < configs.q_dot_low[i]:
+				q_clamp[i,0] = configs.q_dot_low[i]
+			else:
+				q_clamp[i,0] = q[i,0]
+
+		return q_clamp	
+
+
 if __name__=="__main__":
 
-	q_2D = np.array(configs.q_staggered_augmented)[np.newaxis] #four feet on the ground at the same time
+	#q_2D = np.array(configs.q_staggered_augmented)[np.newaxis] #four feet on the ground at the same time
+	q_2D = np.array([0.0]*15)[np.newaxis]
 	# q_2D = np.array(configs.q_symmetric)[np.newaxis] #symmetric limbs
 	#print(q_2D)
-	q_2D[0,3] = q_2D[0,3] + 0.5
+	#q_2D[0,3] = q_2D[0,3] + 0.5
 	q_dot_2D = np.array([0.0]*15)[np.newaxis]
 
 
@@ -623,8 +709,8 @@ if __name__=="__main__":
 	#print(configs.u)
 	#np.savetxt('staticTorque1',t)
 	#simulator.simulate(2, fixed = True)
-	#simulator.debugSimulation()
-	Q = np.array(configs.q_staggered_augmented + [0]*15)
-	Q[3] = Q[3] + 0.5
-	U = np.array(configs.u_augmented_mosek)
-	a,j = simulator.getDynJac(Q, U)
+	simulator.debugSimulation()
+	#Q = np.array(configs.q_staggered_augmented + [0]*15)
+	#Q[3] = Q[3] + 0.5
+	#U = np.array(configs.u_augmented_mosek)
+	#a,j = simulator.getDynJac(Q, U)

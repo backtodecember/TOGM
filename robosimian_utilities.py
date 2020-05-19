@@ -48,6 +48,7 @@ class granularMedia:
 				self.W = np.load('data/sandPolyevenW.npy')
 				self.func = 4 #polyeven
 				self.eta = 4
+				self.scale =17.0
 			else:
 				#The pebbles seems too rigid
 				self.W = np.load('pebblesLinearW.npy')

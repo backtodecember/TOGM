@@ -5,7 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import logging
 from trajoptlib.io import get_onoff_args
-from trajoptlib import System, NonLinearPointObj, LqrObj,linearConstr,nonLinearObj
+from trajoptlib import System, NonLinearPointObj, LqrObj
+from trajoptlib import LinearConstr,NonLinearObj
 from trajoptlib import TrajOptProblem
 from trajoptlib import OptConfig, OptSolver
 from trajoptlib.utility import show_sol
@@ -15,7 +16,7 @@ from robosimian_GM_simulation import robosimianSimulator
 import pdb
 import configs
 from klampt.math import vectorops as vo
-from trajoptlib import 
+import copy
 class Robosimian(System):
 	def __init__(self):
 		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
@@ -61,13 +62,7 @@ class Robosimian(System):
 	# 	#maybe convert J to coomatrix
 	# 	return a,J
 
-class cyclicConstr(linearConstr):
-	def __init__(self):
-		linearPointConstr.__init__()
 
-class transportationCost(nonLinearObj):
-	def __init__(self):
-		nonLinearObj.__init__()
 
 #These are the force and torque that could support the robot in place.
 single_traj_guess = [0,0.915,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15
@@ -75,9 +70,10 @@ single_u_guess = configs.u_augmented_mosek
 
 
 sys = Robosimian()
-N = 50
+global N
+N = 100
 t0 = 0.0
-tf = 0.25
+tf = 2.0
 #This uses direct transcription
 problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 # penetrationConstr = penetrationConstraint(30)
@@ -118,6 +114,100 @@ problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 # problem.x0bd = [np.array(x0lower),np.array(x0upper)]
 # problem.xfbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
 
+
+#####This is for setting 12
+diff = [2]*15
+diff[1] = 0.25 #small z change
+diff[2] = 0.8 #small torso angle change
+problem.xbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
+problem.ubd = [np.array([-100]*12),np.array([100]*12)]
+#diff[2] = 0.1 #horizontal torso angle at the start of the traj
+problem.x0bd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
+problem.xfbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
+
+class cyclicConstr(LinearConstr):
+	def __init__(self):
+		global N
+		dmin = 0.3
+		dmax = 1.0
+		nX = 30
+		nU = 12
+		nP = 0
+		A = np.zeros((nX,N*(nX+nU+nP)))
+		lb = np.zeros(nX)
+		ub = np.zeros(nX)
+		#enough x translation
+		A[0,0] = -1.0
+		A[0,0+(N-1)*(nX+nU+nP)] = 1.0
+		lb[0] = dmin
+		ub[0] = dmax
+		#Remain same for the other state dimensions
+		for i in range(nX):
+			if i > 0:
+				A[i,i] = 1.0
+				A[i,i+(N-1)*(nX+nU+nP)] = -1.0
+		LinearConstr.__init__(self,A,lb = lb,ub = ub)
+
+class transportationCost(NonLinearObj):
+	def __init__(self):
+		self.nX = 30
+		self.nU = 12
+		self.nP = 0
+		global N
+		self.N = N
+		self.first_q_dot = 18
+		self.NofJoints = 12
+		self.first_u = 30
+		NonLinearObj.__init__(self,nsol = self.N*(self.nX+self.nU+self.nP),nG = self.N*(self.nX+self.nU)-self.N*self.first_q_dot +2  )
+
+		#print(self.N*(self.nX+self.nU)-self.N*self.first_q_dot +2)
+	def __callg__(self,x, F, G, row, col, rec, needg):
+		effort_sum = 0.0
+		for i in range(self.N):
+			for j in range(self.NofJoints):
+				#q_dot * u
+				effor_sum = effort_sum + (x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
+					x[i*(self.nX+self.nU+self.nP)+self.first_u+j])**2
+		F[:] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])
+		if needg:
+			Gs = []
+			nonzeros = [0]
+			# for i in range(self.N):
+			# 	for j in range(self.first_q_dot):
+			# 		G[i*(self.nX+self.nU+self.nP)+j] = 0.0
+			Gs.append(effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2)
+			#G[0] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2
+			#G[(self.N-1)*(self.nX+self.nU+self.nP)] = -effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2
+			d = x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]
+			for i in range(self.N-1):
+				for j in range(self.NofJoints):
+					# G[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j] = 2.0*x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
+					# 	x[i*(self.nX+self.nU+self.nP)+self.first_u+j]**2
+					Gs.append(2.0/d*x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
+						x[i*(self.nX+self.nU+self.nP)+self.first_u+j]**2)
+					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j)
+				for j in range(self.NofJoints):
+					# G[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j+self.NofJoints] = 2.0*x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]**2*\
+					# 	x[i*(self.nX+self.nU+self.nP)+self.first_u+j]
+					Gs.append(2.0/d*(x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]**2)*\
+						x[i*(self.nX+self.nU+self.nP)+self.first_u+j])
+					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j+self.NofJoints)
+			Gs.append(-effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2)
+			nonzeros.append((self.N-1)*(self.nX+self.nU+self.nP))
+			for i in [self.N-1]:
+				for j in range(self.NofJoints):
+					Gs.append(2.0/d*x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
+						x[i*(self.nX+self.nU+self.nP)+self.first_u+j]**2)
+					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j)
+				for j in range(self.NofJoints):
+					Gs.append(2.0/d*(x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]**2)*\
+						x[i*(self.nX+self.nU+self.nP)+self.first_u+j])
+					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j+self.NofJoints)
+			G[:] = Gs
+			if rec:
+				row[:] = [0]
+				col[:] = nonzeros
+
 #####Original setting
 # R = np.array([1.0]*12)
 # cost = LqrObj(R = R)#,ubase = np.array(single_u_guess))
@@ -134,13 +224,24 @@ problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 #problem.add_lqr_obj(cost)
 
 #setting 12
-problem.add
+c = transportationCost()
+constr1 = cyclicConstr()
+problem.addNonLinearObj(c)
+problem.addLinearConstr(constr1)
+startTime = time.time()
 problem.preProcess()
+print('preProcess took:',time.time() - startTime)
 #print_level 1 for SNOPT is verbose enough
 #print_level 0-12 for IPOPT 5 is appropriate
 cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4)
 #cfg = OptConfig(backend = 'ipopt',print_level = 5,print_file='tmp.out',opt_tol = 1e-4)
 slv = OptSolver(problem, cfg)
+
+#setting 12
+slv.solver.setWorkspace(4000000,5000000)
+
+print('set workspace done')
+
 startTime = time.time()
 
 
@@ -148,7 +249,9 @@ startTime = time.time()
 traj_guess = []
 u_guess = []
 for i in range(N):
-	traj_guess.append(single_traj_guess)
+	tmp = copy.copy(single_traj_guess)
+	tmp[0] = i*0.002
+	traj_guess.append(tmp)
 	u_guess.append(single_u_guess)
 
 guess = problem.genGuessFromTraj(X= np.array(traj_guess), U=np.array(u_guess), t0 = 0, tf = tf)

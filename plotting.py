@@ -70,9 +70,19 @@ for i in range(m):
 # plt.title('trajectory')
 # plt.show()
 
-plt.plot(time,x_dot[:,0],time,x_dot[:,1],time,x_dot[:,2],time,x_dot[:,3],time,x_dot[:,4],time,x_dot[:,5])
-plt.legend(['q1_dot','q2_dot','q3_dot','q4_dot','q5_dot','q6_dot'])
+#plot velocity
+# plt.plot(time,x_dot[:,0],time,x_dot[:,1],time,x_dot[:,2],time,x_dot[:,3],time,x_dot[:,4],time,x_dot[:,5])
+# plt.legend(['q1_dot','q2_dot','q3_dot','q4_dot','q5_dot','q6_dot'])
+# plt.ylabel('state')
+# plt.xlabel('time')
+# plt.title('trajectory')
+# plt.show()
+
+#plot control
+
+plt.plot(time,u[:,0],time,u[:,1],time,u[:,2],time,u[:,3],time,u[:,4],time,u[:,5])
+plt.legend(['u1','u2','u3','u4','u5','u6'])
 plt.ylabel('state')
 plt.xlabel('time')
-plt.title('trajectory')
+plt.title('controls')
 plt.show()

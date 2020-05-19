@@ -20,6 +20,7 @@ def jac_dyn(x, u ,eps = 1e-4):
 	global robot
 	#calculate accleration and dynamics jacobian
 	a,J_SA = robot.getDynJac(x,u)
+
 	#a,C,D,wc = robot.getDyn(x,u)
 	#print('accleration:',a)
 	print('------------------------------------------')
@@ -42,6 +43,9 @@ def jac_dyn(x, u ,eps = 1e-4):
 	print('SA')
 	print(J_SA[15:30,0:4])
 	# print(J_SA[15:30,4:8])
+
+	print(J_SA[0,:])
+	print(np.shape(J_SA))
 	return
 
 def jacobian(x,u):
@@ -84,13 +88,13 @@ def plot():
 	plt.title('Acceleration changes')
 	plt.show()
 if __name__=="__main__":
-	x_new = vo.add(configs.q_staggered_limbs,[0.1,0.0,0.05,0.02,-0.03,-0.3,-0.1,0.15,-0.2,-0.3,0.25,-0.4,-0.07,0.2,-0.2])
-	x0 = np.array(x_new+[0.0]*15) #0.936 -- -0.08 ankle depth
+	#x_new = vo.add(configs.q_staggered_limbs,[0.1,0.0,0.05,0.02,-0.03,-0.3,-0.1,0.15,-0.2,-0.3,0.25,-0.4,-0.07,0.2,-0.2])
+	#x0 = np.array(x_new+[0.0]*15) #0.936 -- -0.08 ankle depth
 	x0 = np.array(configs.q_staggered_limbs+[0.0]*15) #0.936 -- -0.08 ankle depth
-	x0[1] = 0.915
-	x0 = x0 + np.random.rand(30)*0.1
-	#x0[1] = 1.0
-	u0 = np.array(configs.u_augmented) + np.array(np.random.rand(12))
+	#x0[1] = 0.915
+	#x0 = x0 + np.random.rand(30)*0.1
+	x0[1] = 1.0
+	u0 = np.array(configs.u_augmented_mosek) + np.array(np.random.rand(12))
 	#u0 = np.array(np.random.rand(12))
 	#u0 = np.zeros(12)
 	#u0 = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
@@ -102,7 +106,7 @@ if __name__=="__main__":
 
 
 	initialize()
-	compute(x0,u0)
-	plot()
+	# compute(x0,u0)
+	# plot()
 
-	#jac_dyn(x0,u0)
+	jac_dyn(x0,u0)
