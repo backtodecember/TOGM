@@ -86,7 +86,7 @@ class CustomEnv(gym.Env):
 
 	def rewardStand(self,obs,act):
 
-		return -np.linalg.norm(obs[15:30])**2-(obs[1]-0.915)**2 - (obs[0]-0.0)**2 - (obs[2]-0.0)**2 
+		return 0.1-np.linalg.norm(obs[15:30])**2-(obs[1]-0.915)**2 - (obs[0]-0.0)**2 - (obs[2]-0.0)**2 
 
 	def reset(self):
 
@@ -102,11 +102,12 @@ if __name__=="__main__":
 	start_time = time.time()
 	env = CustomEnv()
 	#check_env(env)
-	model = PPO2('MlpPolicy', env,tensorboard_log ="RL_results/5")
-	#model = PPO2.load("RL_results/test4")
-	model.learn(total_timesteps=150000)
+	model = PPO2('MlpPolicy', env,tensorboard_log ="RL_results/6")
+	#model = PPO2.load("RL_results/test6")
+	#model.set_env(env)
+	model.learn(total_timesteps=360000)
 	log_dir = "RL_results/"
-	model.save("RL_results/test5")
+	model.save("RL_results/test6")
 
 	print('Total time:',time.time() - start_time)
 	# stats_path = os.path.join(log_dir, "stats.pkl")

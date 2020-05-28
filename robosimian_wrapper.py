@@ -1,6 +1,7 @@
 #klampt wrappper
 from klampt import WorldModel
 from klampt.math import vectorops as vo
+from klampt.model import ik, collide
 import numpy as np
 import math
 
@@ -55,6 +56,9 @@ class robosimian:
 
 	def get_world(self):
 		return self.world_all_active
+
+	def get_CoM(self):
+		return self.robot_all_active.getCom()
 
 	def set_q_2D(self,q):
 		"""
@@ -139,7 +143,8 @@ class robosimian:
 			direction = self.robot_all_active.link(13+i*8).getWorldDirection((-0.15,0.0,0.0))
 			a = math.atan2(direction[0],direction[2])
 			positions.append([p[0],p[2],a])
-
+			#debug
+			#print(p,self.robot_all_active.link(13+i*8).getTransform())
 		return positions
 
 	def get_Jacobians(self):
@@ -291,6 +296,35 @@ class robosimian:
 		for (i,j) in zip(self.revolute_joint_indices_3D,self.revolute_joint_indices_2D):
 			u_3D[i] = u[j]
 		return u_3D
+
+	def do_IK(self,R,t,limb):
+		"""
+		limb: int, 0-3
+
+		"""
+		current_config = self.robot_all_active.getConfig()
+		active_Dofs = self.active_joint_indices[limb*3:limb*3+3]
+		link = self.robot_all_active.link(13+8*limb)
+		goal = ik.objective(link,R=R,t = t)
+		if ik.solve(goal,activeDofs = active_Dofs,tol = 5e-3):
+			target_config = self.robot_all_active.getConfig()
+			target_config_2D = []
+			for index in self.joint_indices_3D:
+				target_config_2D.append(target_config[index])
+		else:
+			self.robot_all_active.setConfig(current_config)
+			print('IK solve failure: no IK solution found')
+			return
+		self.robot_all_active.setConfig(current_config)
+		return target_config_2D
+
+
+
+
+
+
+
+
 
 
 if __name__=="__main__":

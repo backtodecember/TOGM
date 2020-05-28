@@ -66,9 +66,9 @@ class robosimianSimulator:
 			self.A = cp.Parameter((3*4,26*4))
 			self.A2 = cp.Parameter((4,26*4))
 			self.b2 = cp.Parameter((4,1))
-			#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
-			#	cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
-			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
+			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
+				cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
+			#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
 
 			self.constraints = [self.x[0:12] - self.A@self.x[12:12+26*4]== np.zeros((12,1)),\
 				self.A2@self.x[12:12+26*4] <= self.b2,\
@@ -128,6 +128,7 @@ class robosimianSimulator:
 		a,C,D,wc = self.simulateOnce(u)
 		return a,C,D,wc
 
+
 	def getStaticTorques(self,x):
 		q = x[0:15]
 		q_dot = x[15:30]
@@ -144,8 +145,19 @@ class robosimianSimulator:
 
 		return np.vstack((self.q,self.q_dot,self.ankle_poses))
 
-	def simulateOnce(self,u,continuous_simulation = False, SA = False, fixed = False):#debug,counter):
+	def getConfig(self):
+		"""
+		return:
+		----------
+		1d numpy array
+		"""
 
+		return self.q.ravel()
+
+	def simulateOnce(self,u,continuous_simulation = False, SA = False, fixed = False):#debug,counter):
+		"""
+		u: 1D np array
+		"""
 		##add viscious friction
 		if self.RL:
 			u_friction = []
@@ -225,8 +237,11 @@ class robosimianSimulator:
 				x_k = self.x.value[0:12]
 				wc = x_k
 
-				print('ground reaction force',x_k)
-				print('ankle poses:',self.ankle_poses)
+				#debug
+				print('Contact force',wc)
+				if self.RL:
+					print('ground reaction force',x_k)
+					print('ankle poses:',self.ankle_poses)
 
 				if self.print_level == 1:
 					print('ground reaction force',x_k)
@@ -340,6 +355,9 @@ class robosimianSimulator:
 				if continuous_simulation:
 					self.q_dot = self.C.value+self.D.value@wc
 
+				##bebug
+				#print((self.C.value+self.D.value@wc)[0:3])
+				#print('Com',self.robot.get_CoM())
 			elif self.solver == 'mpqp':
 
 				D_prime = D*self.dt
@@ -366,6 +384,8 @@ class robosimianSimulator:
 				#v_k_1 = self.q_dot + C + D@A@w2
 				#print('objectove value:',v_k_1.T@M@v_k_1)
 				wc = A@w2
+				v
+
 				if continuous_simulation:
 					self.q_dot = C*self.dt+D@wc*self.dt
 
@@ -403,15 +423,15 @@ class robosimianSimulator:
 				return C,[]
 
 		if NofContacts > 0:
-			if SA:
-				return C+D@wc,dx_dotdx
-			else:
-				return C+D@wc,C,D,wc
+			if not self.RL:
+				return x_k
 		else:
-			if SA:
-				return C,dx_dotdx
-			else:
-				return C
+			if not self.RL:
+				return x_k
+			# if SA:
+			# 	return C,dx_dotdx
+			# else:
+			# 	return C
 
 	def simulate(self,total_time,plot = False, fixed = True):
 		world = self.robot.get_world()
@@ -474,7 +494,28 @@ class robosimianSimulator:
 			vis.unlock()
 			time.sleep(0.1)
 		vis.kill()
-	def reset(self,q,q_dot):
+
+	# def debugSimulationTraj(self,qs,dt = 0.1):
+	# 	"""
+	# 	qs: a list of configurations
+	# 	"""
+
+	# 	world = self.robot.get_world()
+	# 	vis.add("world",world)
+	# 	vis.show()
+
+	# 	vis.show()
+	# 	for q in qs:
+	# 		vis.lock()
+	# 		self.reset(np.array(q))
+	# 		vis.unlock()
+	# 		time.sleep(dt)
+
+	# 	while vis.shown():
+	# 		time.sleep(dt)
+	# 	vis.kill()
+
+	def reset(self,q,q_dot = np.array([0]*15)):
 		"""
 		Parameters:
 		numpy 1D array
@@ -483,9 +524,12 @@ class robosimianSimulator:
 		self.q_dot = q_dot[np.newaxis].T
 		self.robot.set_q_2D_(q)
 		self.robot.set_q_dot_2D_(q_dot)
-		_ = self.generateContacts()
 
-		return np.concatenate((q,q_dot,np.ravel(self.ankle_poses)))
+		if self.RL:
+			_ = self.generateContacts()
+			return np.concatenate((q,q_dot,np.ravel(self.ankle_poses)))
+		else:
+			return 
 	def _klamptFDRelated(self,C,D,wc,u):
 		initial_q = deepcopy(self.q) #it is a column vector
 		initial_q_dot = deepcopy(self.q_dot)

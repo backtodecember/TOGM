@@ -15,7 +15,7 @@ robot = robosimianSimulator(q_2D,q_dot_2D,dt = 0.01,solver = 'cvxpy', augmented 
 world = robot.getWorld()
 #load the model
 log_dir = "RL_results/"
-model = PPO2.load("RL_results/test5")
+model = PPO2.load("RL_results/test6")
 
 env = RL.CustomEnv()
 obs = env.reset()
