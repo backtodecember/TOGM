@@ -128,24 +128,32 @@ class robosimian:
 	
 
 
-	def get_ankle_positions(self):
-		"""return the 2D positions of the 4 ankle sole positions
+	def get_ankle_positions(self,full = False):
+		"""return the 2D/3D positions of the 4 ankle sole positions. If full == True, return the 3D position
 
 		returns:
 		------------
-		a 4*3 list
+		a 4*3 list or 4*6 list
 		"""
 		positions = []
 		if self.print_level == 1:
 			print('current robot q when calculating ankle positions:',self.robot_all_active.getConfig())
-		for i in range(4):
-			p = self.robot_all_active.link(13+i*8).getWorldPosition((0.15,0.0,0.0)) 
-			direction = self.robot_all_active.link(13+i*8).getWorldDirection((-0.15,0.0,0.0))
-			a = math.atan2(direction[0],direction[2])
-			positions.append([p[0],p[2],a])
-			#debug
-			#print(p,self.robot_all_active.link(13+i*8).getTransform())
+		if full:
+			for i in range(4):
+				p = self.robot_all_active.link(13+i*8).getWorldPosition((0.15,0.0,0.0)) 
+				direction = self.robot_all_active.link(13+i*8).getWorldDirection((-0.15,0.0,0.0))
+				a = math.atan2(direction[0],direction[2])
+				positions.append(p+direction)
+		else:
+			for i in range(4):
+				p = self.robot_all_active.link(13+i*8).getWorldPosition((0.15,0.0,0.0)) 
+				direction = self.robot_all_active.link(13+i*8).getWorldDirection((-0.15,0.0,0.0))
+				a = math.atan2(direction[0],direction[2])
+				positions.append([p[0],p[2],a])
+
 		return positions
+
+
 
 	def get_Jacobians(self):
 		local_pt = (0,0,0)

@@ -32,7 +32,6 @@ def target_q(time):
 error = np.array([0.0]*12)
 last_error = np.array([0.0]*12)
 accumulated_error = np.array([0.0]*12)
-
 world = simulator.getWorld()
 vis.add("world",world)
 vis.show()
@@ -40,8 +39,16 @@ vis.addText('time','time: '+str(0))
 time.sleep(20.0)
 simulation_time = 0.0
 start_time = time.time()
-while vis.shown() and (simulation_time < 10.0):
-	loop_start_time = time.time()
+
+
+q_history = []
+q_dot_history = []
+u_history = []
+time_history = []
+
+
+while vis.shown() and (simulation_time < 10.001):
+	#loop_start_time = time.time()
 	vis.lock()
 	#simulation_time = time.time() - start_time
 	current_q = simulator.getConfig()[3:15] #1d array of 15 elements
@@ -53,10 +60,18 @@ while vis.shown() and (simulation_time < 10.0):
 	u_raw = np.multiply(kp,error) + np.multiply(kd,dError) + np.multiply(ki,accumulated_error)
 	u = np.clip(u_raw,-200.0,200.0)
 
+
+
 	for i in range(4):
 		u[i*3+1] += u[i*3+2] 
 		u[i*3] += u[i*3+1]
 	u = np.clip(u_raw,-300.0,300.0) 
+
+	#record 
+	q_history.append(simulator.getConfig().tolist())
+	q_dot_history.append(simulator.getVel().tolist())
+	u_history.append(u.tolist())
+	time_history.append(simulation_time)
 	# if simulation_time > 0.02:
 	# 	u[11] = 5000.0
 	simulation_time += dt
@@ -75,3 +90,7 @@ while vis.shown() and (simulation_time < 10.0):
 
 vis.kill()
 
+# np.save('results/PID_trajectory/1/q_history.npy',np.array(q_history))
+# np.save('results/PID_trajectory/1/q_dot_history.npy',np.array(q_dot_history))
+# np.save('results/PID_trajectory/1/u_history.npy',np.array(u_history))
+# np.save('results/PID_trajectory/1/time_history.npy',np.array(time_history))

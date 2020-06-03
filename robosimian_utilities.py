@@ -251,9 +251,9 @@ class granularMedia:
 
 		if func == 4: #polyeven
 			if self.augmented:
-				dphidr = math.log(r**r)+r*(math.log(r)+1)
+				dphidr = math.log(r**r)+r*(math.log(r)+1) #eta = 2
 			else:
-				dphidr = 3*r**2*math.log(r**r)+r**3*(math.log(r)+1)
+				dphidr = 3*r**2*math.log(r**r)+r**3*(math.log(r)+1) #eta = 4
 
 			#the bug is here.. need to scale....
 

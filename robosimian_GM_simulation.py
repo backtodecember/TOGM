@@ -19,6 +19,7 @@ import ctypes as ct
 import configs
 import pdb
 import mosek
+from copy import copy
 class robosimianSimulator:
 	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01, solver = 'cvxpy',print_level = 0, \
 		augmented = True, RL = False):
@@ -102,31 +103,54 @@ class robosimianSimulator:
 			print("Wrong formulation specification")
 			exit()
 	
-	def getDynJac(self,x,u):
-		q = x[0:15]
-		q_dot = x[15:30]
-		self.q = q[np.newaxis].T
-		self.q_dot = q_dot[np.newaxis].T
-		self.robot.set_q_2D_(q)
-		self.robot.set_q_dot_2D_(q_dot)
-		a,DynJac = self.simulateOnce(u,SA = True)
-		return a,DynJac
+	def getDynJac(self,x,u,continuous = False):
 
-	def getDyn(self,x,u):
+		if not continuous:
+			q = x[0:15]
+			q_dot = x[15:30]
+			self.q = q[np.newaxis].T
+			self.q_dot = q_dot[np.newaxis].T
+			self.robot.set_q_2D_(q)
+			self.robot.set_q_dot_2D_(q_dot)
+			force,a,DynJac = self.simulateOnce(u,continuous_simulation = continuous,SA = True)
+			return a,DynJac
+		else:
+			q = x[0:15]
+			q_dot = x[15:30]
+			self.q = q[np.newaxis].T
+			self.q_dot = q_dot[np.newaxis].T
+			self.robot.set_q_2D_(q)
+			self.robot.set_q_dot_2D_(q_dot)
+			force,a,DynJac = self.simulateOnce(u,continuous_simulation = continuous,SA = True)
+
+			return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
+
+	def getDyn(self,x,u,continuous = False):
 		"""
 		Parameters:
 		---------------
 		x,u are 1d vectors
 		"""
-		q = x[0:15]
-		q_dot = x[15:30]
-		self.q = q[np.newaxis].T
-		self.q_dot = q_dot[np.newaxis].T
+		if not continuous:
+			q = x[0:15]
+			q_dot = x[15:30]
+			self.q = q[np.newaxis].T
+			self.q_dot = q_dot[np.newaxis].T
 
-		self.robot.set_q_2D_(q)
-		self.robot.set_q_dot_2D_(q_dot)
-		a,C,D,wc = self.simulateOnce(u)
-		return a,C,D,wc
+			self.robot.set_q_2D_(q)
+			self.robot.set_q_dot_2D_(q_dot)
+			force,a = self.simulateOnce(u, continuous_simulation = continuous)
+			return a
+		else:
+			q = x[0:15]
+			q_dot = x[15:30]
+			self.q = q[np.newaxis].T
+			self.q_dot = q_dot[np.newaxis].T
+
+			self.robot.set_q_2D_(q)
+			self.robot.set_q_dot_2D_(q_dot)
+			force,a = self.simulateOnce(u, continuous_simulation = continuous)
+			return a,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
 
 	def getStaticTorques(self,x):
@@ -152,7 +176,17 @@ class robosimianSimulator:
 		1d numpy array
 		"""
 
-		return self.q.ravel()
+		return copy(self.q.ravel())
+
+	def getVel(self):
+		"""
+		return:
+		----------
+		1d numpy array
+		"""
+
+		return copy(self.q_dot.ravel())
+
 
 	def simulateOnce(self,u,continuous_simulation = False, SA = False, fixed = False):#debug,counter):
 		"""
@@ -238,7 +272,7 @@ class robosimianSimulator:
 				wc = x_k
 
 				#debug
-				print('Contact force',wc)
+				#print('Contact force',wc)
 				if self.RL:
 					print('ground reaction force',x_k)
 					print('ankle poses:',self.ankle_poses)
@@ -256,11 +290,6 @@ class robosimianSimulator:
 				if not self.prob.status == "optimal":
 					print("cvxpy status:", self.prob.status)
 			
-
-				# gammas = np.vstack((self.constraints[1].dual_value,self.constraints[2].dual_value))
-
-				# print('constraint values:',self.A2.value@self.x.value[12:12+26*4])
-				# print(self.x.value[12:12+26*4])
 				#debug:
 				if self.print_level == 1:
 					#print('active constraints (multipliers not close to  0:')
@@ -269,12 +298,8 @@ class robosimianSimulator:
 					print('constraint values:',self.A2.value@self.x.value[12:12+26*4])
 					print(self.x.value[12:12+26*4])
 					
-					# for i in range(108):
-					# 	if math.fabs(gammas[i,0]) > 1e-8:
-					# 		print(i)
 				#Sensitivity analysis 
 				if SA:
-					#-dEyy
 					self.dEyy[0:12,0:12] = self.D.value.T@self.M.value@self.D.value				
 					dQ1dx,dadx = self._klamptFDRelated(C,D,x_k,u)
 					self.dEyx[0:self.Dx+self.Du,0:12] = dQ1dx
@@ -355,9 +380,6 @@ class robosimianSimulator:
 				if continuous_simulation:
 					self.q_dot = self.C.value+self.D.value@wc
 
-				##bebug
-				#print((self.C.value+self.D.value@wc)[0:3])
-				#print('Com',self.robot.get_CoM())
 			elif self.solver == 'mpqp':
 
 				D_prime = D*self.dt
@@ -422,16 +444,16 @@ class robosimianSimulator:
 			else:
 				return C,[]
 
-		if NofContacts > 0:
-			if not self.RL:
-				return x_k
+		if not self.RL:
+			if NofContacts > 0:
+				if SA:
+					return x_k,C+D@wc,dx_dotdx
+				else:
+					return x_k,C+D@wc
+			else:
+				pass
 		else:
-			if not self.RL:
-				return x_k
-			# if SA:
-			# 	return C,dx_dotdx
-			# else:
-			# 	return C
+			return 
 
 	def simulate(self,total_time,plot = False, fixed = True):
 		world = self.robot.get_world()

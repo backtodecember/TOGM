@@ -59,7 +59,7 @@ ps4 = []
 for q,q_dot,one_u in zip(x[:,0:15],x[:,15:30],u):
 	if counter == 0:
 		robot.reset(q,q_dot)
-	ground_force = robot.simulateOnce(one_u,continuous_simulation = True)
+	ground_force,_ = robot.simulateOnce(one_u,continuous_simulation = True)
 	if counter == 0:
 		data = np.array(ground_force)
 	else:
