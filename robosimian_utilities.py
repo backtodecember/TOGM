@@ -3,14 +3,15 @@ import numpy as np
 import math
 from copy import deepcopy
 from klampt.math import so2
-from klampt.math import vectorops as vo
+from klampt.math import vectorops as vo 
 import scipy.io as sio
 from scipy.spatial import ConvexHull
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 class granularMedia:
-	def __init__(self,material = "sand",print_level = 0,augmented = False):
-
+	def __init__(self,material = "sand",print_level = 0,augmented = False,extrapolation = False):
+		self.extrapolation = extrapolation #linearly scale the wrench torque
+		#self.extrapolation_factor = 2.5
 		self.print_level = print_level
 		self.augmented = augmented
 		if augmented:
@@ -21,7 +22,14 @@ class granularMedia:
 
 			self.material_range = [-0.07,0.9]
 			#self.W = np.load('data/sandPolyevenWAugmented.npy') #this one does not have the zeros
-			self.W = np.load('data/sandPolyevenWAugmented2.npy')
+			if self.extrapolation:
+				self.W = np.load('data/sandPolyevenWAugmented3.npy')
+				self.theta = np.load('data/sandPolyevenThetaAugmented3.npy')
+			else:
+				self.W = np.load('data/sandPolyevenWAugmented2.npy')
+				self.theta = np.load('data/sandPolyevenThetaAugmented2.npy')
+			# if self.extrapolation:
+			# 	self.W = self.W*self.extrapolation_factor
 			self.func = 4 #polyeven
 			self.eta = 2
 
@@ -29,7 +37,7 @@ class granularMedia:
 			#self.Ntheta = 33
 			#self.scale = 17.0
 			self.scale = 5.0
-			self.theta = np.load('data/sandPolyevenThetaAugmented2.npy')
+			
 			self.Ntheta = 168
 		else:
 			if material == "sand":
@@ -160,14 +168,6 @@ class granularMedia:
 					# 		print('---- in utilities-----')
 					for iteration2 in range(self.Ntheta):
 						val,grad = self._RBF(theta_new,self.theta[iteration2],self.eta,self.func)
-
-						# debug
-						# if self.print_level == 1:
-						# 	if iteration == 9:
-						# 		print(val,grad)
-
-						
-
 						p = vo.add(p,vo.mul(weights[iteration2],val))
 						#SA
 						w = np.array(weights[iteration2])[np.newaxis].T

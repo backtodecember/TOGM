@@ -48,7 +48,7 @@ class checker:
 			+[0.6+1.5708,0.0,-0.6])[np.newaxis].T
 		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
 		self.dt = 0.01
-		self.robot = robosimianSimulator(q = q_2D,q_dot= q_dot_2D,dt = self.dt,solver = 'cvxpy',print_level = 0)
+		self.robot = robosimianSimulator(q = q_2D,q_dot= q_dot_2D,dt = self.dt,solver = 'cvxpy',print_level = 0,extrapolation=True)
 		self.N = N
 
 	def jac_dyn(self,x, u, p=None):
@@ -96,15 +96,15 @@ class checker:
 		return total_f/self.N #1D numpy array
 
 x = np.array(configs.q_staggered_limbs+[0.0]*15) #0.936 -- -0.08 ankle depth
-x[1] = 1.0
+x[1] = 1.01
 u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
 
-checker = checker(8)
+checker = checker(1)
 a,J_SA = checker.jac_dyn(x, u)
 #print(a)
 #calculate jacobian with finite-difference
-eps = 1e-6
+eps = 1e-5
 J = np.zeros((30,30+12))
 for i in [0,1,2,3]:
 	FD_vector = np.zeros(30)

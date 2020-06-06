@@ -22,13 +22,13 @@ import mosek
 from copy import copy
 class robosimianSimulator:
 	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01, solver = 'cvxpy',print_level = 0, \
-		augmented = True, RL = False):
+		augmented = True, RL = False, extrapolation = False):
 
 		self.robot = robosimian(print_level = print_level, RL = RL)
 		self.q = q
 		self.q_dot = q_dot
 		self.print_level = print_level
-		self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented)
+		self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
 		self.dt = dt
 		self.time = 0
 
@@ -227,6 +227,7 @@ class robosimianSimulator:
 
 		for contact in contacts:
 			add_A,Q4s = self.terrain.feasibleWrenchSpace(contact,self.robot.ankle_length,True)
+
 			A[contact[3]*3:(contact[3]+1)*3,contact[3]*26:(contact[3]+1)*26] = add_A
 			#SA
 			if SA:
@@ -250,7 +251,7 @@ class robosimianSimulator:
 				#self.A2.value = A2
 				self.b2.value = b2
 
-				#start_time = time.time()
+				start_time = time.time()
 				#
 				# print('control:',u)
 				# print('state q:',self.q)
@@ -267,7 +268,7 @@ class robosimianSimulator:
 				#self.prob.solve(solver=cp.OSQP,verbose = False,warm_start = False)#,eps_abs = 1e-12,eps_rel = 1e-12,max_iter = 10000000)
 				#self.prob.solve(verbose = False,warm_start = True)
 				#print(self.constraints[2].dual_value)
-				#print('time:',time.time() - start_time)
+				print('time:',time.time() - start_time)
 				x_k = self.x.value[0:12]
 				wc = x_k
 
