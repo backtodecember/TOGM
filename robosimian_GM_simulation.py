@@ -67,9 +67,9 @@ class robosimianSimulator:
 			self.A = cp.Parameter((3*4,26*4))
 			self.A2 = cp.Parameter((4,26*4))
 			self.b2 = cp.Parameter((4,1))
-			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
-				cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
-			#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
+			#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
+			#	cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
+			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
 
 			self.constraints = [self.x[0:12] - self.A@self.x[12:12+26*4]== np.zeros((12,1)),\
 				self.A2@self.x[12:12+26*4] <= self.b2,\
