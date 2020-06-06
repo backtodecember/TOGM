@@ -150,12 +150,11 @@ class PIDTracker:
 		self.kd = np.array([10.0,8.0,10.0]*4)
 
 		(self.N,_) = np.shape(self.x)
-		self.method = method
 		self.iterations = np.arange(self.N)
 		self.times = self.iterations*self.dt
 		#slow down 20x
-		self.ref_trajectory = Trajectory(times = self.times ,milestones = self.x.tolist())
-		self.ref_torque = Trajectory(times = self.times, milestones = self.x.tolist())
+		self.ref_trajectory = trajectory.Trajectory(times = self.times ,milestones = self.x.tolist())
+		self.ref_torque = trajectory.Trajectory(times = self.times, milestones = self.u.tolist())
 		#settings for animating the trajectory
 		self.vis_dt = 0.005*40
 		self.force_scale = 0.001 #200N would be 0.2m
@@ -163,7 +162,7 @@ class PIDTracker:
 		self.world = self.robot.getWorld()
 		vis.add("world",self.world)
 
-	def run()
+	def run(self):
 		self.ankle_position_list = []
 		self.force_list = []
 
@@ -188,7 +187,7 @@ class PIDTracker:
 		time_history = []
 
 
-		while vis.shown() and (simulation_time < self.time[-1]+0.0001):
+		while vis.shown() and (simulation_time < self.times[-1]+0.0001):
 			#loop_start_time = time.time()
 			vis.lock()
 			#simulation_time = time.time() - start_time
@@ -240,14 +239,14 @@ class PIDTracker:
 		self.q_dot_history = np.array(q_dot_history)
 		self.u_history = np.array(u_history)
 		self.time_history = np.array(time_history)
-		np.save('results/'+case+'/PIDTracker_q.npy',self.q_history)
-		np.save('results/'+case+'/PIDTracker_q_dot.npy',self.q_dot_history)
-		np.save('results/'+case+'/PIDTracker_u.npy',self.u_history)
-		np.save('results/'+case+'/PIDTracker_time.npy',self.time_history)
+		np.save('results/'+self.case+'/PIDTracker_q.npy',self.q_history)
+		np.save('results/'+self.case+'/PIDTracker_q_dot.npy',self.q_dot_history)
+		np.save('results/'+self.case+'/PIDTracker_u.npy',self.u_history)
+		np.save('results/'+self.case+'/PIDTracker_time.npy',self.time_history)
 
 
 	def _targetQ(self,time):
-		return trajectory.eval(time,True)[3:15]
+		return self.ref_trajectory.eval(time,True)[3:15]
 
 if __name__=="__main__":
 	#analyzer = analyzer('8',dt = 0.005,"Euler")
@@ -256,5 +255,7 @@ if __name__=="__main__":
 	#print('calculation done, took',time.time() - start_time)
 	#analyzer.animate()
 	#analyzer.dynConstrViolation()
-	tracker = PIDTracker('8',True,dt=0.005)
-	tracker.run()
+
+	#########
+	#tracker = PIDTracker('8',True,dt=0.005)
+	#tracker.run()
