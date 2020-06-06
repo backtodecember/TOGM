@@ -135,7 +135,8 @@ class analyzer:
 			plt.show()
 
 class PIDTracker:
-	def __init__():
+	def __init__(self,case,visualization = True, dt = 0.005):
+		self.visualization = visualization
 		self.dt = dt
 		q0 = np.array(configs.q_staggered_augmented)[np.newaxis].T
 		q_dot0 = np.zeros((15,1))
@@ -154,17 +155,106 @@ class PIDTracker:
 		self.times = self.iterations*self.dt
 		#slow down 20x
 		self.ref_trajectory = Trajectory(times = self.times ,milestones = self.x.tolist())
+		self.ref_torque = Trajectory(times = self.times, milestones = self.x.tolist())
 		#settings for animating the trajectory
 		self.vis_dt = 0.005*40
 		self.force_scale = 0.001 #200N would be 0.2m
 
 		self.world = self.robot.getWorld()
-		vis.add("world",self.world)vvvvv
+		vis.add("world",self.world)
+
+	def run()
+		self.ankle_position_list = []
+		self.force_list = []
+
+		if self.visualization:
+			vis.show()
+			vis.addText('time','time: '+str(0.0))
+
+		#reset the robot
+		self.robot.reset(self.x[0,0:15],self.x[0,15:30])
+		#start simulation
+		error = np.array([0.0]*12)
+		last_error = np.array([0.0]*12)
+		accumulated_error = np.array([0.0]*12)
+		time.sleep(2.0)
+		simulation_time = 0.0
+		#start_time = time.time()
+
+		#record these
+		q_history = []
+		q_dot_history = []
+		u_history = []
+		time_history = []
+
+
+		while vis.shown() and (simulation_time < self.time[-1]+0.0001):
+			#loop_start_time = time.time()
+			vis.lock()
+			#simulation_time = time.time() - start_time
+			current_q = self.robot.getConfig()[3:15] #1d array of 15 elements
+			desired_q = np.array(self._targetQ(simulation_time))
+			last_error = deepcopy(error)
+			error = desired_q - current_q
+			dError = (error - last_error)/self.dt
+			accumulated_error += error
+			u_raw = np.multiply(self.kp,error) + np.multiply(self.kd,dError) + np.multiply(self.ki,accumulated_error)
+			tau = np.clip(u_raw,-200.0,200.0)
+			#feed forward in one limb
+			for i in range(4):
+				tau[i*3+1] += tau[i*3+2] 
+				tau[i*3] += tau[i*3+1]
+
+			#add reference torque
+			tau = tau + np.array(self.ref_torque.eval(simulation_time,True))
+			tau = np.clip(tau,-300.0,300.0) 
+
+			#record 
+			q_history.append(self.robot.getConfig().tolist())
+			q_dot_history.append(self.robot.getVel().tolist())
+			u_history.append(tau.tolist())
+			time_history.append(simulation_time)
+
+			simulation_time += self.dt
+			#vis.clearText()
+			vis.addText('time','time: '+str(simulation_time))
+			# print('time',simulation_time)
+			# print('desired q',desired_q)
+			# print('current q',current_q)
+			# print('error',error)
+			# print('u:',u)
+
+			force,a = self.robot.simulateOnce(tau,continuous_simulation = True)
+			ankle_positions = self.robot.robot.get_ankle_positions(full = True)
+			self.force_list.append(force)
+			self.ankle_position_list.append(ankle_positions)
+			vis.unlock()
+			time.sleep(0.001)
+
+		while vis.shown():
+			time.sleep(0.1)
+		vis.kill()
+
+		#save stuff
+		self.q_history = np.array(q_history)
+		self.q_dot_history = np.array(q_dot_history)
+		self.u_history = np.array(u_history)
+		self.time_history = np.array(time_history)
+		np.save('results/'+case+'/PIDTracker_q.npy',self.q_history)
+		np.save('results/'+case+'/PIDTracker_q_dot.npy',self.q_dot_history)
+		np.save('results/'+case+'/PIDTracker_u.npy',self.u_history)
+		np.save('results/'+case+'/PIDTracker_time.npy',self.time_history)
+
+
+	def _targetQ(self,time):
+		return trajectory.eval(time,True)[3:15]
 
 if __name__=="__main__":
-	analyzer = analyzer('8',dt = 0.005,"Euler")
-	start_time = time.time()
-	analyzer.calculation()
-	print('calculation done, took',time.time() - start_time)
+	#analyzer = analyzer('8',dt = 0.005,"Euler")
+	#start_time = time.time()
+	#analyzer.calculation()
+	#print('calculation done, took',time.time() - start_time)
 	#analyzer.animate()
 	#analyzer.dynConstrViolation()
+	tracker = PIDTracker('8',True,dt=0.005)
+	tracker.run()
