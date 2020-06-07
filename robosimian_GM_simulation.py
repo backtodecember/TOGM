@@ -225,17 +225,45 @@ class robosimianSimulator:
 			#SA
 			self.dhy[0:12,12:116] = np.zeros((12,104))
 
-		for contact in contacts:
-			add_A,Q4s = self.terrain.feasibleWrenchSpace(contact,self.robot.ankle_length,True)
 
-			A[contact[3]*3:(contact[3]+1)*3,contact[3]*26:(contact[3]+1)*26] = add_A
-			#SA
-			if SA:
-				self.dhy[contact[3]*3:(contact[3]+1)*3,contact[3]*26+12:(contact[3]+1)*26+12] = -add_A
-				Q4s_all_limbs.append(Q4s)
+		##### compute the wrench space of at 4 ankles in parallel using process ###
+		args = []
+		if NofContacts > 0:
+			for i in range(4):
+				if i <= NofContacts -1:
+					args.append([contacts[i],self.robot.ankle_length,True])
+				else:
+					args.append([0,0,False])
+			compute_pool = mp.Pool(NofContacts)
+			res = compute_pool.starmap(self.terrain.feasibleWrenchSpace,args)
+
+			for i in range(NofContacts):
+				add_A = res[i][0]
+				Q4s = res[i][1]
+				A[contact[i][3]*3:(contact[3]+1)*3,contact[3]*26:(contact[3]+1)*26] = add_A
+				b[contacts[i][3]*self.estimated_upper_bound:(contacts[i][3]+1)*self.estimated_upper_bound,:] = \
+					add_b
+				Aeq[contacts[i][3]*3:contacts[i][3]*3+3,contacts[i][3]*3:contacts[i][3]*3+3] = np.zeros((3,3))
+
+		Timer
+		WS_time = time.time() - last_time
+		last_time = time.time()
+		
 
 
-			b2[contact[3]] = 1
+		# for contact in contacts:
+		# 	add_A,Q4s = self.terrain.feasibleWrenchSpace(contact,self.robot.ankle_length,True)
+
+		# 	A[contact[3]*3:(contact[3]+1)*3,contact[3]*26:(contact[3]+1)*26] = add_A
+		# 	#SA
+		# 	if SA:
+		# 		self.dhy[contact[3]*3:(contact[3]+1)*3,contact[3]*26+12:(contact[3]+1)*26+12] = -add_A
+		# 		Q4s_all_limbs.append(Q4s)
+
+
+		# 	b2[contact[3]] = 1
+
+
 		if self.print_level == 1:
 			print("wrench vertices from limb 1",A[0:3,0:26])
 			# print("active vertex",A[3:6,9+26])
