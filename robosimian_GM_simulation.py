@@ -235,7 +235,7 @@ class robosimianSimulator:
 		args = []
 		if NofContacts > 0:
 			for i in range(4):
-				if i <= NofContacts -1:
+				if i <= NofContacts-1:
 					args.append([contacts[i],self.robot.ankle_length,True])
 				else:
 					args.append([0,0,False])
@@ -246,14 +246,10 @@ class robosimianSimulator:
 				add_A = res[i][0]
 				Q4s = res[i][1]
 				A[contact[i][3]*3:(contact[3]+1)*3,contact[3]*26:(contact[3]+1)*26] = add_A
-				b[contacts[i][3]*self.estimated_upper_bound:(contacts[i][3]+1)*self.estimated_upper_bound,:] = \
-					add_b
-				Aeq[contacts[i][3]*3:contacts[i][3]*3+3,contacts[i][3]*3:contacts[i][3]*3+3] = np.zeros((3,3))
-
-		Timer
-		WS_time = time.time() - last_time
-		last_time = time.time()
-		
+				b2[contacts[i][3]] = 1
+				if SA:
+					self.dhy[contact[i][3]*3:(contact[i][3]+1)*3,contact[i][3]*26+12:(contact[i][3]+1)*26+12] = -add_A
+					Q4s_all_limbs.append(Q4s)
 
 
 		# for contact in contacts:
@@ -291,10 +287,6 @@ class robosimianSimulator:
 				self.b2.value = b2
 
 				start_time = time.time()
-				#
-				# print('control:',u)
-				# print('state q:',self.q)
-				# print('state q dot:',self.q_dot)
 
 
 				#mosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
@@ -308,7 +300,7 @@ class robosimianSimulator:
 				#self.prob.solve(verbose = False,warm_start = True)
 				#print(self.constraints[2].dual_value)
 
-						#Debug
+				#Debug
 				print('Checkpoint 2:',time.time() - loop_start_time)
 
 				print('CVX solving took:',time.time() - start_time)
