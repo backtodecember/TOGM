@@ -8,6 +8,7 @@ import scipy.io as sio
 from scipy.spatial import ConvexHull
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
+import time
 class granularMedia:
 	def __init__(self,material = "sand",print_level = 0,augmented = False,extrapolation = False):
 		self.extrapolation = extrapolation #linearly scale the wrench torque
@@ -158,6 +159,11 @@ class granularMedia:
 				#SA
 				Q4s = np.zeros((self.Nvel,6))
 				#slope_angle = contact[4]
+
+				#debug
+				start_time = time.time()
+
+				
 				for iteration in range(self.Nvel):
 					weights = self.W[iteration*self.Ntheta:iteration*self.Ntheta+self.Ntheta]
 					p = [0,0,0] 
@@ -226,7 +232,8 @@ class granularMedia:
 				# 		z = [wrenches[tri[0],2],wrenches[tri[1],2],wrenches[tri[2],2],wrenches[tri[0],2]]
 				# 		ax.plot3D(x,y,z,'red')
 				# 	plt.show()
-
+				#debug
+				print('Calculate one wrench space took:',time.time() - start_time)
 				return wrenches.T,Q4s
 
 		else:
