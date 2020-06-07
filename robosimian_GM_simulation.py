@@ -191,7 +191,12 @@ class robosimianSimulator:
 	def simulateOnce(self,u,continuous_simulation = False, SA = False, fixed = False):#debug,counter):
 		"""
 		u: 1D np array
-		"""
+		"""	
+
+		#debug:
+		loop_start_time = time.time()
+
+
 		##add viscious friction
 		if self.RL:
 			u_friction = []
@@ -239,6 +244,12 @@ class robosimianSimulator:
 		if self.print_level == 1:
 			print("wrench vertices from limb 1",A[0:3,0:26])
 			# print("active vertex",A[3:6,9+26])
+		
+		#Debug
+		print('Checkpoint 1:',time.time() - loop_start_time)
+
+
+
 
 		if NofContacts > 0:
 
@@ -268,7 +279,13 @@ class robosimianSimulator:
 				#self.prob.solve(solver=cp.OSQP,verbose = False,warm_start = False)#,eps_abs = 1e-12,eps_rel = 1e-12,max_iter = 10000000)
 				#self.prob.solve(verbose = False,warm_start = True)
 				#print(self.constraints[2].dual_value)
-				print('time:',time.time() - start_time)
+
+						#Debug
+				print('Checkpoint 2:',time.time() - loop_start_time)
+
+				print('CVX solving took:',time.time() - start_time)
+
+
 				x_k = self.x.value[0:12]
 				wc = x_k
 
@@ -299,6 +316,10 @@ class robosimianSimulator:
 					print('constraint values:',self.A2.value@self.x.value[12:12+26*4])
 					print(self.x.value[12:12+26*4])
 					
+
+			#Debug
+				print('Checkpoint 3:',time.time() - loop_start_time)
+
 				#Sensitivity analysis 
 				if SA:
 					self.dEyy[0:12,0:12] = self.D.value.T@self.M.value@self.D.value				
@@ -437,6 +458,8 @@ class robosimianSimulator:
 			self.robot.set_q_2D(self.q)
 			self.robot.set_q_dot_2D(self.q_dot)
 
+		#Debug
+		print('Checkpoint 4:',time.time() - loop_start_time)
 
 		#################################################################
 		if fixed:

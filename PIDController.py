@@ -36,7 +36,7 @@ world = simulator.getWorld()
 vis.add("world",world)
 vis.show()
 vis.addText('time','time: '+str(0))
-time.sleep(20.0)
+time.sleep(1.0)
 simulation_time = 0.0
 start_time = time.time()
 
@@ -86,6 +86,7 @@ while vis.shown() and (simulation_time < 10.001):
 
 	simulate_start_time = time.time()
 	simulator.simulateOnce(u,continuous_simulation = True)
+	print('Simulate Once took:',time.time() - simulate_start_time)
 	vis.unlock()
 	time.sleep(0.001)
 
