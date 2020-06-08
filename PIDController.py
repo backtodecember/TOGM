@@ -91,9 +91,11 @@ while vis.shown() and (simulation_time < 10.001):
 	time.sleep(0.001)
 
 
-vis.kill()
 
 np.save('results/PID_trajectory/2/q_history.npy',np.array(q_history))
 np.save('results/PID_trajectory/2/q_dot_history.npy',np.array(q_dot_history))
 np.save('results/PID_trajectory/2/u_history.npy',np.array(u_history))
 np.save('results/PID_trajectory/2/time_history.npy',np.array(time_history))
+
+simulator.closePool()
+vis.kill()

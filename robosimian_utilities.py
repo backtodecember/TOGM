@@ -163,7 +163,7 @@ class granularMedia:
 				#slope_angle = contact[4]
 
 				#debug
-				start_time = time.time()
+				#start_time = time.time()
 
 				
 				for iteration in range(self.Nvel):
@@ -238,7 +238,7 @@ class granularMedia:
 				# 		ax.plot3D(x,y,z,'red')
 				# 	plt.show()
 				#debug
-				print('Calculate one wrench space took:',time.time() - start_time)
+				#print('Calculate one wrench space took:',time.time() - start_time)
 				return wrenches.T,Q4s
 
 		else:

@@ -13,14 +13,19 @@ from klampt.math import vectorops as vo
 import time
 import matplotlib.pyplot as plt
 class analyzer:
-	def __init__(self,case = '11-2',dt = 0.005,method = "Euler"):
+	def __init__(self,case = '11-2',dt = 0.005,method = "Euler",x_data = [],u_data = []):
 		self.dt = dt
 		q0 = np.array(configs.q_staggered_augmented)[np.newaxis].T
 		q_dot0 = np.zeros((15,1))
-		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = dt, solver = 'cvxpy', augmented = True)
+		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = dt, solver = 'cvxpy', augmented = True, extrapolation= True)
 		self.case = case
-		self.u = np.load('results/'+case+'/solution_u.npy')
-		self.x = np.load('results/'+case+'/solution_x.npy')
+
+		if x_data != []:
+			self.x = x_data
+			self.u = u_data
+		else:
+			self.u = np.load('results/'+case+'/solution_u.npy')
+			self.x = np.load('results/'+case+'/solution_x.npy')
 		(self.N,_) = np.shape(self.x)
 		self.method = method
 		self.iterations = np.arange(self.N)
@@ -90,21 +95,29 @@ class analyzer:
 		return
 
 	def dynConstrViolation(self,method = 'Euler'):
-		plt.plot(self.times[0:self.N-1],self.violations)
-		plt.title('Dynamics Constraint Violation')
-		plt.grid()
-		plt.ylabel('Unscaled Constraint Violation 2-norm')
-		plt.xlabel('Time (s)')
-		plt.show()
+		print('Average Constraint Violations:',np.average(np.array(self.violations)))
+
+		# plt.plot(self.times[0:self.N-1],self.violations)
+		# plt.title('Dynamics Constraint Violation')
+		# plt.grid()
+		# plt.ylabel('Unscaled Constraint Violation 2-norm')
+		# plt.xlabel('Time (s)')
+		# plt.show()
 		return
 
-	def plotObjective(self):
+	def objective(self,x,u):
 		"""
 		This is problem specific
 		"""
 		
-
-		return								
+		#below is the transportation cost
+		effort_sum = 0.0
+		for i in range(self.N):
+			for j in range(12):
+				#q_dot * u
+				effort_sum = effort_sum + (x[i,j+18]*u[i,j])**2
+		obj = effort_sum/(x[self.N -1 ,0] - x[0,0])
+		return obj/self.N							
 
 	def otherConstr(self,type):
 		"""
@@ -134,16 +147,59 @@ class analyzer:
 			fig.suptitle('Limb ' + str(limb+1) +' Ground Reaction Force ')
 			plt.show()
 
+	def perIterationObj(self):
+		return
+
+	def perIterationConstrVio(self):
+		return
+
+class pcTraj:
+	def __init__(self,times,milestones):
+		self.times = times
+		self.milestones = milestones
+		assert len(self.times)  == len(self.milestones)
+		self.total_t = self.times[-1]
+		self.total_N = len(self.times)
+
+	def eval(self,t,c):
+		assert t>= 0
+
+		if c:
+			if t > self.total_t:
+				t = t%self.total_t
+		
+		else:
+			assert t <= self.total_t
+		
+		for i in range(self.total_N):
+			if t < self.times[i]:
+				break
+		
+		if i < 1:
+			return self.milestones[0]
+		else:
+			return self.milestones[i-1]
+	
+
 class PIDTracker:
-	def __init__(self,case,visualization = True, dt = 0.005):
+	def __init__(self,case,visualization = True, traj_dt = 0.005, x_data = [],u_data = [], initial = True):
+		"""
+		The PID tracker tracks an optimized trajectory on a simulator using Euler integration with dt = 0.005
+		"""
 		self.visualization = visualization
-		self.dt = dt
+		self.initial = initial
+		self.dt = 0.005 #this is the default PID dt
 		q0 = np.array(configs.q_staggered_augmented)[np.newaxis].T
 		q_dot0 = np.zeros((15,1))
-		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = dt, solver = 'cvxpy', augmented = True)
+		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = self.dt, solver = 'cvxpy', augmented = True, extrapolation= True)
 		self.case = case
-		self.u = np.load('results/'+case+'/solution_u.npy')
-		self.x = np.load('results/'+case+'/solution_x.npy')
+		if x_data != []:
+			self.x = x_data
+			self.u = u_data
+		else:
+			self.u = np.load('results/'+case+'/solution_u.npy')
+			self.x = np.load('results/'+case+'/solution_x.npy')
+
 
 		self.kp = np.array([1000.0,1000.0,1000.0]*4)
 		self.ki = np.array([2.0]*12)
@@ -151,10 +207,11 @@ class PIDTracker:
 
 		(self.N,_) = np.shape(self.x)
 		self.iterations = np.arange(self.N)
-		self.times = self.iterations*self.dt
+		self.times = self.iterations*traj_dt
 		#slow down 20x
 		self.ref_trajectory = trajectory.Trajectory(times = self.times ,milestones = self.x.tolist())
-		self.ref_torque = trajectory.Trajectory(times = self.times, milestones = self.u.tolist())
+		#self.ref_torque = trajectory.Trajectory(times = self.times, milestones = self.u.tolist())  ## this actually does piece-wise linear interpolation
+		self.ref_torque = pcTraj(times = self.times, milestones = self.u.tolist())  #this does piece-wise constant
 		#settings for animating the trajectory
 		self.vis_dt = 0.005*40
 		self.force_scale = 0.001 #200N would be 0.2m
@@ -186,76 +243,117 @@ class PIDTracker:
 		u_history = []
 		time_history = []
 
+		if self.visualization:
 
-		while vis.shown() and (simulation_time < self.times[-1]+0.0001):
-			#loop_start_time = time.time()
-			vis.lock()
-			#simulation_time = time.time() - start_time
-			current_q = self.robot.getConfig()[3:15] #1d array of 15 elements
-			desired_q = np.array(self._targetQ(simulation_time))
-			last_error = deepcopy(error)
-			error = desired_q - current_q
-			dError = (error - last_error)/self.dt
-			accumulated_error += error
-			u_raw = np.multiply(self.kp,error) + np.multiply(self.kd,dError) + np.multiply(self.ki,accumulated_error)
-			tau = np.clip(u_raw,-200.0,200.0)
-			#feed forward in one limb
-			for i in range(4):
-				tau[i*3+1] += tau[i*3+2] 
-				tau[i*3] += tau[i*3+1]
+			while vis.shown() and (simulation_time < self.times[-1]+0.0001):
+				#loop_start_time = time.time()
+				vis.lock()
+				#simulation_time = time.time() - start_time
+				current_q = self.robot.getConfig()[3:15] #1d array of 15 elements
+				desired_q = np.array(self._targetQ(simulation_time))
+				last_error = deepcopy(error)
+				error = desired_q - current_q
+				dError = (error - last_error)/self.dt
+				accumulated_error += error
+				u_raw = np.multiply(self.kp,error) + np.multiply(self.kd,dError) + np.multiply(self.ki,accumulated_error)
+				tau = np.clip(u_raw,-200.0,200.0)
+				#feed forward in one limb
+				for i in range(4):
+					tau[i*3+1] += tau[i*3+2] 
+					tau[i*3] += tau[i*3+1]
 
-			#add reference torque
-			tau = tau + np.array(self.ref_torque.eval(simulation_time,True))
-			tau = np.clip(tau,-300.0,300.0) 
+				#add reference torque
+				ref_tau = self.ref_torque.eval(simulation_time,True)
+				#print('ref_torque',ref_tau)
+				tau = tau + np.array(ref_tau)
+				tau = np.clip(tau,-300.0,300.0) 
 
-			#record 
-			q_history.append(self.robot.getConfig().tolist())
-			q_dot_history.append(self.robot.getVel().tolist())
-			u_history.append(tau.tolist())
-			time_history.append(simulation_time)
+				#record 
+				q_history.append(self.robot.getConfig().tolist())
+				q_dot_history.append(self.robot.getVel().tolist())
+				u_history.append(tau.tolist())
+				time_history.append(simulation_time)
 
-			simulation_time += self.dt
-			#vis.clearText()
-			vis.addText('time','time: '+str(simulation_time))
-			# print('time',simulation_time)
-			# print('desired q',desired_q)
-			# print('current q',current_q)
-			# print('error',error)
-			# print('u:',u)
+				simulation_time += self.dt
+				vis.addText('time','time: '+str(simulation_time))
 
-			force,a = self.robot.simulateOnce(tau,continuous_simulation = True)
-			ankle_positions = self.robot.robot.get_ankle_positions(full = True)
-			self.force_list.append(force)
-			self.ankle_position_list.append(ankle_positions)
-			vis.unlock()
-			time.sleep(0.001)
+				force,a = self.robot.simulateOnce(tau,continuous_simulation = True)
+				ankle_positions = self.robot.robot.get_ankle_positions(full = True)
+				self.force_list.append(force)
+				self.ankle_position_list.append(ankle_positions)
+				vis.unlock()
+				time.sleep(0.001)
+			while vis.shown():
+				time.sleep(0.1)
+			vis.kill()
+		else:
+			while (simulation_time < self.times[-1]+0.0001):
+				
+				current_q = self.robot.getConfig()[3:15] #1d array of 15 elements
+				desired_q = np.array(self._targetQ(simulation_time))
+				last_error = deepcopy(error)
+				error = desired_q - current_q
+				dError = (error - last_error)/self.dt
+				accumulated_error += error
+				u_raw = np.multiply(self.kp,error) + np.multiply(self.kd,dError) + np.multiply(self.ki,accumulated_error)
+				tau = np.clip(u_raw,-200.0,200.0)
+				#feed forward in one limb
+				for i in range(4):
+					tau[i*3+1] += tau[i*3+2] 
+					tau[i*3] += tau[i*3+1]
 
-		while vis.shown():
-			time.sleep(0.1)
-		vis.kill()
+				#add reference torque
+				ref_tau = self.ref_torque.eval(simulation_time,True)
+				#print('ref_torque',ref_tau)
+				tau = tau + np.array(ref_tau)
+				tau = np.clip(tau,-300.0,300.0) 
+
+				#record 
+				q_history.append(self.robot.getConfig().tolist())
+				q_dot_history.append(self.robot.getVel().tolist())
+				u_history.append(tau.tolist())
+				time_history.append(simulation_time)
+
+				simulation_time += self.dt
+				vis.addText('time','time: '+str(simulation_time))
+
+				force,a = self.robot.simulateOnce(tau,continuous_simulation = True)
+				ankle_positions = self.robot.robot.get_ankle_positions(full = True)
+				self.force_list.append(force)
+				self.ankle_position_list.append(ankle_positions)
+
+		
 
 		#save stuff
 		self.q_history = np.array(q_history)
 		self.q_dot_history = np.array(q_dot_history)
 		self.u_history = np.array(u_history)
 		self.time_history = np.array(time_history)
-		np.save('results/'+self.case+'/PIDTracker_q.npy',self.q_history)
-		np.save('results/'+self.case+'/PIDTracker_q_dot.npy',self.q_dot_history)
-		np.save('results/'+self.case+'/PIDTracker_u.npy',self.u_history)
-		np.save('results/'+self.case+'/PIDTracker_time.npy',self.time_history)
+
+		if self.initial:
+			np.save('results/'+self.case+'/PIDTracked_q_initial.npy',self.q_history)
+			np.save('results/'+self.case+'/PIDTracker_q_dot_initial.npy',self.q_dot_history)
+			np.save('results/'+self.case+'/PIDTracker_u_initial.npy',self.u_history)
+			np.save('results/'+self.case+'/PIDTracker_time_intial.npy',self.time_history)
+
 
 
 	def _targetQ(self,time):
 		return self.ref_trajectory.eval(time,True)[3:15]
 
-if __name__=="__main__":
-	#analyzer = analyzer('8',dt = 0.005,"Euler")
-	#start_time = time.time()
-	#analyzer.calculation()
-	#print('calculation done, took',time.time() - start_time)
-	#analyzer.animate()
-	#analyzer.dynConstrViolation()
 
-	#########
-	#tracker = PIDTracker('8',True,dt=0.005)
-	#tracker.run()
+if __name__=="__main__":
+
+	##### code to check the intial guess
+	# traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
+	# u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+	# analyzer = analyzer('',dt = 0.05,method = "Euler",x_data = traj_guess, u_data = u_guess)
+	# analyzer.calculation()
+	# analyzer.dynConstrViolation()
+	# print('objective is',analyzer.objective(traj_guess,u_guess))
+
+	##### code to generate the PID tracked trajectory of initial guess(with large dt)
+	traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
+	u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+	tracker = PIDTracker('14',False,traj_dt=0.05,x_data = traj_guess,u_data = u_guess, initial = True)
+	tracker.run()

@@ -149,7 +149,7 @@ class transportationCost(NonLinearObj):
 		for i in range(self.N):
 			for j in range(self.NofJoints):
 				#q_dot * u
-				effor_sum = effort_sum + (x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
+				effort_sum = effort_sum + (x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
 					x[i*(self.nX+self.nU+self.nP)+self.first_u+j])**2
 		F[:] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])
 		if needg:

@@ -65,15 +65,15 @@ class Robosimian(System):
 
 
 #These are the force and torque that could support the robot in place.
-single_traj_guess = [0,0.915,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15
-single_u_guess = configs.u_augmented_mosek
+# single_traj_guess = [0,0.915,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15
+# single_u_guess = configs.u_augmented_mosek
 
 
 sys = Robosimian()
 global N
-N = 100
+N = 181 #9s trajectory 0.05s
 t0 = 0.0
-tf = 2.0
+tf = 0.05*(N-1)
 #This uses direct transcription
 problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 # penetrationConstr = penetrationConstraint(30)
@@ -116,14 +116,23 @@ problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 
 
 #####This is for setting 12
-diff = [2]*15
-diff[1] = 0.25 #small z change
-diff[2] = 0.8 #small torso angle change
-problem.xbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
-problem.ubd = [np.array([-100]*12),np.array([100]*12)]
-#diff[2] = 0.1 #horizontal torso angle at the start of the traj
-problem.x0bd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
-problem.xfbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
+# diff = [2]*15
+# diff[1] = 0.25 #small z change
+# diff[2] = 0.8 #small torso angle change
+# problem.xbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
+# problem.ubd = [np.array([-100]*12),np.array([100]*12)]
+# #diff[2] = 0.1 #horizontal torso angle at the start of the traj
+# problem.x0bd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
+# problem.xfbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
+
+######setting 14
+problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-3]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [3]*15)]
+problem.ubd = [np.array([-300]*12),np.array([300]*12)]
+problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi]*12 + [-0.2]*15),np.array([0.05,1.1,0.3] + [math.pi]*12 + [0.2]*15)]
+problem.xfbd = [np.array([0.3,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
+
+
+
 
 class cyclicConstr(LinearConstr):
 	def __init__(self):
@@ -166,7 +175,7 @@ class transportationCost(NonLinearObj):
 		for i in range(self.N):
 			for j in range(self.NofJoints):
 				#q_dot * u
-				effor_sum = effort_sum + (x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
+				effort_sum = effort_sum + (x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
 					x[i*(self.nX+self.nU+self.nP)+self.first_u+j])**2
 		F[:] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])
 		if needg:
@@ -224,37 +233,46 @@ class transportationCost(NonLinearObj):
 #problem.add_lqr_obj(cost)
 
 #setting 12
+# c = transportationCost()
+# constr1 = cyclicConstr()
+# problem.addNonLinearObj(c)
+# problem.addLinearConstr(constr1)
+
+#settting 14
 c = transportationCost()
-constr1 = cyclicConstr()
 problem.addNonLinearObj(c)
-problem.addLinearConstr(constr1)
+
 startTime = time.time()
 problem.preProcess()
 print('preProcess took:',time.time() - startTime)
 #print_level 1 for SNOPT is verbose enough
-#print_level 0-12 for IPOPT 5 is appropriate
+#print_level 0-12 for IPOPT 5 is appropriate, 6 more detailed
 cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4)
-#cfg = OptConfig(backend = 'ipopt',print_level = 5,print_file='tmp.out',opt_tol = 1e-4)
 slv = OptSolver(problem, cfg)
 
 #setting 12
-slv.solver.setWorkspace(4000000,5000000)
+#slv.solver.setWorkspace(4000000,5000000)
 
-print('set workspace done')
+#setting 14
+slv.solver.setWorkspace(7000000,8000000)
 
 startTime = time.time()
 
 
+# #setting 1-13
+# traj_guess = []
+# u_guess = []
+# for i in range(N):
+# 	tmp = copy.copy(single_traj_guess)
+# 	tmp[0] = i*0.002
+# 	traj_guess.append(tmp)
+# 	u_guess.append(single_u_guess)
+#guess = problem.genGuessFromTraj(X= np.array(traj_guess), U=np.array(u_guess), t0 = 0, tf = tf)
 
-traj_guess = []
-u_guess = []
-for i in range(N):
-	tmp = copy.copy(single_traj_guess)
-	tmp[0] = i*0.002
-	traj_guess.append(tmp)
-	u_guess.append(single_u_guess)
-
-guess = problem.genGuessFromTraj(X= np.array(traj_guess), U=np.array(u_guess), t0 = 0, tf = tf)
+#setting 14
+traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
+u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 result = problem.parseF(guess)
 #print(result)

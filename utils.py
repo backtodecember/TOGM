@@ -6,7 +6,7 @@ def trajectory_loader(start,end,dt,number):
 	load a trajectory into desired start and end, with  desired dt
 
 	"""
-	if number == 1:
+	if number == 2:
 		#1st second is standing still, the rest of 8 second is walking (1,3 swing first, then 2,4 swing)
 		original_dt = 0.005
 		start_walking  = 1.0
@@ -40,23 +40,26 @@ def trajectory_loader(start,end,dt,number):
 		q_dot.append(q_dot_history[-1])
 		time.append(time_history[-1])
 		u.append(u_history[-1])
-		print('----q-----')
+
+
+		print('----q ranges-----')
 		for i in range(15):
 			print(np.max(np.array(q)[:,i]),np.min(np.array(q)[:,i]))
-		print('----q_dot-----')
+		print('----q_dot rabges-----')
 		for i in range(15):
 			print(np.max(np.array(q_dot)[:,i]),np.min(np.array(q_dot)[:,i]))
+
+		print('----u ranges ------')
 		for i in range(12):
 			print(np.max(np.array(u)[:,i]),np.min(np.array(u)[:,i]))
 
 		#print(time,q[0][0],q[-1][0])
 		
 
-		# np.save('results/PID_trajectory/1/q_init_guess.npy',np.array(q))
-		# np.save('results/PID_trajectory/1/q_dot_init_guess.npy',np.array(q_dot))
-		# np.save('results/PID_trajectory/1/u_init_guess.npy',np.array(u))
-		# np.save('results/PID_trajectory/1/time_init_guess.npy',np.array(time))
-
+		np.save('results/PID_trajectory/2/q_init_guess.npy',np.array(q))
+		np.save('results/PID_trajectory/2/q_dot_init_guess.npy',np.array(q_dot))
+		np.save('results/PID_trajectory/2/u_init_guess.npy',np.array(u))
+		np.save('results/PID_trajectory/2/time_init_guess.npy',np.array(time))
 
 
 		#print(len(q_history),len(u_history))
@@ -66,5 +69,5 @@ def trajectory_loader(start,end,dt,number):
 		# plt.show()
 
 if __name__=="__main__":
-	trajectory_loader(1.0,10.0,0.08,1)
+	trajectory_loader(start = 1.0,end = 10.0,dt = 0.05, number = 2)
 	#print(round(0.08/0.01))

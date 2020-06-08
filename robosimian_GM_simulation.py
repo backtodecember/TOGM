@@ -22,7 +22,7 @@ import mosek
 from copy import copy
 
 
-# import multiprocessing
+import multiprocessing as mp
 # # We must import this explicitly, it is not imported by the top-level
 # # multiprocessing module.
 # import multiprocessing.pool
@@ -52,6 +52,7 @@ class robosimianSimulator:
 		self.q_dot = q_dot
 		self.print_level = print_level
 		self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
+		self.compute_pool = mp.Pool(4)
 		self.dt = dt
 		self.time = 0
 
@@ -262,9 +263,9 @@ class robosimianSimulator:
 					args.append([contacts[i],self.robot.ankle_length,True])
 				else:
 					args.append([0,0,False])
-			compute_pool = multiprocessing.Pool(NofContacts)
+			
 			#compute_pool = MyPool(NofContacts)
-			res = compute_pool.starmap(self.terrain.feasibleWrenchSpace,args)
+			res = self.compute_pool.starmap(self.terrain.feasibleWrenchSpace,args)
 
 			for i in range(NofContacts):
 				add_A = res[i][0]
@@ -293,8 +294,7 @@ class robosimianSimulator:
 			print("wrench vertices from limb 1",A[0:3,0:26])
 			# print("active vertex",A[3:6,9+26])
 		
-		#Debug
-		print('Checkpoint 1:',time.time() - loop_start_time)
+
 
 
 
@@ -310,7 +310,7 @@ class robosimianSimulator:
 				#self.A2.value = A2
 				self.b2.value = b2
 
-				start_time = time.time()
+				# start_time = time.time()
 
 
 				#mosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
@@ -324,17 +324,15 @@ class robosimianSimulator:
 				#self.prob.solve(verbose = False,warm_start = True)
 				#print(self.constraints[2].dual_value)
 
-				#Debug
-				print('Checkpoint 2:',time.time() - loop_start_time)
 
-				print('CVX solving took:',time.time() - start_time)
+
+				# print('CVX solving took:',time.time() - start_time)
 
 
 				x_k = self.x.value[0:12]
 				wc = x_k
 
-				#debug
-				#print('Contact force',wc)
+
 				if self.RL:
 					print('ground reaction force',x_k)
 					print('ankle poses:',self.ankle_poses)
@@ -361,9 +359,6 @@ class robosimianSimulator:
 					print(self.x.value[12:12+26*4])
 					
 
-			#Debug
-				print('Checkpoint 3:',time.time() - loop_start_time)
-
 				#Sensitivity analysis 
 				if SA:
 					self.dEyy[0:12,0:12] = self.D.value.T@self.M.value@self.D.value				
@@ -387,23 +382,13 @@ class robosimianSimulator:
 
 							tmp = self._unvectorize(Q4,3,2)@J_raw						
 							Q5 = Q5 - lambdas[limb_index*26+counter]*tmp
-							##debug
-							# if self.print_level == 1:
-							# 	if counter == 9:
-							# 		print('lambda:',lambdas[limb_index*26+counter])
-							# 		#print('J_raw:',J)
-							# 		print(self._unvectorize(Q4,3,2))
-							# 		#print('flag',lambdas[limb_index*26+counter]*tmp)
+
 
 
 							Q4 = -mus[limb_index*3:limb_index*3+3,0]@tmp
 							self.mudhyx[0:self.Dx,12+limb_index*26+counter] = Q4
 							counter = counter + 1
-						self.dhx[limb_index*3:limb_index*3+3,0:self.Dx] = Q5
-						#debug
-						# if self.print_level == 1:
-						# 	if contact[2] < 0:
-						# 		print('limb_index',limb_index)
+
 					#Here:
 					gammas = np.vstack((self.constraints[1].dual_value,self.constraints[2].dual_value))
 					constraint_values = np.vstack((self.A2.value@self.x.value[12:12+26*4]-b2,-self.x.value[12:12+26*4]))
@@ -502,8 +487,6 @@ class robosimianSimulator:
 			self.robot.set_q_2D(self.q)
 			self.robot.set_q_dot_2D(self.q_dot)
 
-		#Debug
-		print('Checkpoint 4:',time.time() - loop_start_time)
 
 		#################################################################
 		if fixed:
@@ -626,9 +609,7 @@ class robosimianSimulator:
 		#for dadx
 		dadx = np.zeros((15,42))
 		current_a = C + D@wc
-		#debug
-		# current_a_3D = deepcopy(current_a)
-		# current_a = current_a[self.joint_indices_3D,:]
+
 		#for dEdydx
 		dQ1dx = np.zeros((self.Dx+self.Du,self.Dwc))
 		current_x = np.ravel(np.vstack((initial_q,initial_q_dot)))
@@ -818,6 +799,8 @@ class robosimianSimulator:
 
 		return q_clamp	
 
+	def closePool(self):
+		self.compute_pool.close()
 
 if __name__=="__main__":
 
