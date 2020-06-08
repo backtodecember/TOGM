@@ -12,7 +12,7 @@ import time
 import cvxpy as cp
 from klampt.math import vectorops as vo
 from klampt import vis
-import multiprocessing as mp
+
 from copy import deepcopy
 from klampt.math import vectorops as vo
 import ctypes as ct
@@ -20,6 +20,29 @@ import configs
 import pdb
 import mosek
 from copy import copy
+
+
+# import multiprocessing
+# # We must import this explicitly, it is not imported by the top-level
+# # multiprocessing module.
+# import multiprocessing.pool
+
+# class NoDaemonProcess(multiprocessing.Process):
+#     # make 'daemon' attribute always return False
+#     def _get_daemon(self):
+#         return False
+#     def _set_daemon(self, value):
+#         pass
+#     daemon = property(_get_daemon, _set_daemon)
+
+# # We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
+# # because the latter is only a wrapper function, not a proper class.
+# class MyPool(multiprocessing.pool.Pool):
+#     Process = NoDaemonProcess
+
+
+
+
 class robosimianSimulator:
 	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01, solver = 'cvxpy',print_level = 0, \
 		augmented = True, RL = False, extrapolation = False):
@@ -239,16 +262,17 @@ class robosimianSimulator:
 					args.append([contacts[i],self.robot.ankle_length,True])
 				else:
 					args.append([0,0,False])
-			compute_pool = mp.Pool(NofContacts)
+			compute_pool = multiprocessing.Pool(NofContacts)
+			#compute_pool = MyPool(NofContacts)
 			res = compute_pool.starmap(self.terrain.feasibleWrenchSpace,args)
 
 			for i in range(NofContacts):
 				add_A = res[i][0]
 				Q4s = res[i][1]
-				A[contact[i][3]*3:(contact[3]+1)*3,contact[3]*26:(contact[3]+1)*26] = add_A
+				A[contacts[i][3]*3:(contacts[i][3]+1)*3,contacts[i][3]*26:(contacts[i][3]+1)*26] = add_A
 				b2[contacts[i][3]] = 1
 				if SA:
-					self.dhy[contact[i][3]*3:(contact[i][3]+1)*3,contact[i][3]*26+12:(contact[i][3]+1)*26+12] = -add_A
+					self.dhy[contacts[i][3]*3:(contacts[i][3]+1)*3,contacts[i][3]*26+12:(contacts[i][3]+1)*26+12] = -add_A
 					Q4s_all_limbs.append(Q4s)
 
 

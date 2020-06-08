@@ -9,6 +9,8 @@ from scipy.spatial import ConvexHull
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import time
+import multiprocessing as mp
+
 class granularMedia:
 	def __init__(self,material = "sand",print_level = 0,augmented = False,extrapolation = False):
 		self.extrapolation = extrapolation #linearly scale the wrench torque
@@ -168,10 +170,16 @@ class granularMedia:
 					weights = self.W[iteration*self.Ntheta:iteration*self.Ntheta+self.Ntheta]
 					p = [0,0,0] 
 					Q4 = np.zeros((3,2))
-					# debug
-					# if self.print_level == 1:
-					# 	if iteration == 9:
-					# 		print('---- in utilities-----')
+
+					#do it in parallel, can't do it if the upper level already doing it in parallel
+					# args = [[theta_new,weights,1],\
+					# 	[theta_new,weights,2]]
+					# compute_pool = mp.Pool(2)
+					# res = compute_pool.starmap(self._predict,args)
+					# p = vo.add(res[0][0],res[1][0])
+					# Q4 = Q4 + res[0][1]+ res[1][1]
+			
+					#do it serially
 					for iteration2 in range(self.Ntheta):
 						val,grad = self._RBF(theta_new,self.theta[iteration2],self.eta,self.func)
 						p = vo.add(p,vo.mul(weights[iteration2],val))
@@ -179,10 +187,7 @@ class granularMedia:
 						w = np.array(weights[iteration2])[np.newaxis].T
 						Q4 = Q4 + np.dot(w,np.array(grad)[np.newaxis])
 
-					# if self.print_level == 1:
-					# 	if iteration == 9:
-					# 		print('----------------------')
-					# 		print('Q4',Q4)
+
 					#p[2] = -p[2]  #the torque defined when robosimian is collecting data is y, into the page.. no longer needs to flip here
 					unit_direction =  [-math.sin(theta_new[1]),0,-math.cos(theta_new[1])]
 					tmp = vo.cross(vo.mul(unit_direction,ankle_length/2.0-self.cT),[p[0],0,p[1]])
@@ -284,6 +289,27 @@ class granularMedia:
 			for i in range(m):
 				v.append(Q[i,j]) #column major
 		return np.array(v)
+
+	def _predict(self,theta_new,weights,part):
+		p = [0,0,0]
+		Q4 = np.zeros((3,2))
+		if part == 1:
+			for iteration2 in range(int(self.Ntheta/2)):
+				val,grad = self._RBF(theta_new,self.theta[iteration2],self.eta,self.func)
+				p = vo.add(p,vo.mul(weights[iteration2],val))
+				#SA
+				w = np.array(weights[iteration2])[np.newaxis].T
+				Q4 = Q4 + np.dot(w,np.array(grad)[np.newaxis])
+		elif part == 2:
+			for iteration2 in range(int(self.Ntheta/2)):
+				iteration2 = iteration2+int(self.Ntheta/2)
+				val,grad = self._RBF(theta_new,self.theta[iteration2],self.eta,self.func)
+				p = vo.add(p,vo.mul(weights[iteration2],val))
+				#SA
+				w = np.array(weights[iteration2])[np.newaxis].T
+				Q4 = Q4 + np.dot(w,np.array(grad)[np.newaxis])
+		return p,Q4
+
 if __name__=="__main__":
 	# #check the validity of the robto kinematics..
 	# mode = "fixed"
