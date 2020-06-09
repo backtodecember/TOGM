@@ -19,7 +19,7 @@ from klampt.math import vectorops as vo
 import copy
 class Robosimian(System):
 	def __init__(self):
-		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
+		System.__init__(self,nx=30,nu=12,np=0,ode='BackEuler')
 		q_2D = np.array([0.0,1.02,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
 	 		+[0.6+1.5708,0.0,-0.6])[np.newaxis].T
 		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
@@ -247,7 +247,7 @@ problem.preProcess()
 print('preProcess took:',time.time() - startTime)
 #print_level 1 for SNOPT is verbose enough
 #print_level 0-12 for IPOPT 5 is appropriate, 6 more detailed
-cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4)
+cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 1000000)
 slv = OptSolver(problem, cfg)
 
 #setting 12
@@ -274,21 +274,33 @@ traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.
 u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
 guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
-result = problem.parseF(guess)
+# result = problem.parseF(guess)
 #print(result)
 #pdb.set_trace()
 #print(guess)
+iteration = 5
 rst = slv.solve_guess(guess)
+sol = problem.parse_sol(rst.sol.copy())
+np.save('temp_files/solution_u'+str(iteration),sol['u'])
+np.save('temp_files/solution_x'+str(iteration),sol['x'])
+print(str(iteration)+ 'iterations completed')
+for i in range(29):
+	iteration += 5
+	rst = slv.solver.solve_more(5)
+	sol = problem.parse_sol(rst.sol.copy())
+	np.save('temp_files/solution_u'+str(iteration),sol['u'])
+	np.save('temp_files/solution_x'+str(iteration),sol['x'])
+	print(str(iteration)+ 'iterations completed')
 
 #rst = slv.solve_rand()
 print('Took', time.time() - startTime)
 print("========results=======")
-print(rst.flag)
-print(rst.fval,np.shape(rst.fval))
-print(rst.sol,np.shape(rst.sol))
-print(np.shape(rst.lmd))
-sol = problem.parse_sol(rst.sol.copy())
-print(sol)
+# print(rst.flag)
+# print(rst.fval,np.shape(rst.fval))
+# print(rst.sol,np.shape(rst.sol))
+# print(np.shape(rst.lmd))
+# sol = problem.parse_sol(rst.sol.copy())
+# print(sol)
 
 np.save('temp_files/solution_u',sol['u'])
 np.save('temp_files/solution_x',sol['x'])

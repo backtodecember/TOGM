@@ -17,7 +17,7 @@ class analyzer:
 		self.dt = dt
 		q0 = np.array(configs.q_staggered_augmented)[np.newaxis].T
 		q_dot0 = np.zeros((15,1))
-		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = dt, solver = 'cvxpy', augmented = True, extrapolation= True)
+		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = 0.005, solver = 'cvxpy', augmented = True, extrapolation= True)
 		self.case = case
 
 		if x_data != []:
@@ -148,11 +148,36 @@ class analyzer:
 			plt.show()
 
 	def perIterationObj(self):
+
+
 		return
 
-	def perIterationConstrVio(self):
+	def perIterDynConstrVio(self):
 		return
 
+	def _dynConstrVio(self,x,u):
+		violations = []
+		for i in range(self.N):
+			self.robot.reset(x[i,0:15],x[i,15:30])
+			force,a = self.robot.simulateOnce(u[i],continuous_simulation = False, SA = False, fixed = False)
+			a = a.ravel()
+			self.force_list.append(force)
+			self.ankle_position_list.append(ankle_positions)
+			if i < self.N - 1:
+				if self.method == 'Euler':
+					#print(np.shape(a),np.shape(self.x))
+					p_error = self.x[i+1,0:15]-self.x[i,0:15]-self.dt*self.x[i,15:30]
+					v_error = self.x[i+1,15:30]-self.x[i,15:30]-self.dt*a
+					#print(p_error,v_error)
+					print('accel',a)
+					print('force',force)
+					print(np.linalg.norm(np.concatenate((p_error,v_error))),np.linalg.norm(self.x[i,:]),np.linalg.norm(self.x[i+1,:]-self.x[i,:]) ,np.linalg.norm(p_error))
+					self.violations.append(np.linalg.norm(np.concatenate((p_error,v_error))))
+					# #print(np.linalg.norm(self.x[i+1,:]-self.x[i,:]-self.dt*a),np.linalg.norm(self.x[i,:]))
+					# print(a)
+					# print(self.x[i,:])
+					# print(a-self.x[i,:])
+		return 
 class pcTraj:
 	def __init__(self,times,milestones):
 		self.times = times
@@ -353,7 +378,15 @@ if __name__=="__main__":
 	# print('objective is',analyzer.objective(traj_guess,u_guess))
 
 	##### code to generate the PID tracked trajectory of initial guess(with large dt)
-	traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
-	u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
-	tracker = PIDTracker('14',False,traj_dt=0.05,x_data = traj_guess,u_data = u_guess, initial = True)
-	tracker.run()
+	# traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
+	# u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+	# tracker = PIDTracker('14',False,traj_dt=0.05,x_data = traj_guess,u_data = u_guess, initial = True)
+	# tracker.run()
+
+	##### code to check the intial guess tracked by PID controller
+	traj_guess = np.hstack((np.load('results/14/PIDTracked_q_initial.npy'),np.load('results/14/PIDTracker_q_dot_initial.npy')))
+	u_guess = np.load('results/14/PIDTracker_u_initial.npy')
+	analyzer = analyzer('',dt = 0.005,method = "Euler",x_data = traj_guess, u_data = u_guess)
+	print('objective is',analyzer.objective(traj_guess,u_guess))
+	print(traj_guess[0,0])
+	print(traj_guess[-1,0])
