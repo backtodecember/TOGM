@@ -22,7 +22,7 @@ class granularMedia:
 			D = mat_contents['D']
 			self.cT = D['cT'][0][0][0][0]
 			self.Nvel = D['Nvel'][0][0][0][0]
-
+			#print(self.cT)
 			self.material_range = [-0.07,0.9]
 			#self.W = np.load('data/sandPolyevenWAugmented.npy') #this one does not have the zeros
 			if self.extrapolation:
@@ -338,7 +338,7 @@ if __name__=="__main__":
 	# print(vo.norm(vo.sub(q_full_k_prime,q_full_k)))
 
 	##debug terrain
-	terrain = granularMedia()
+	terrain = granularMedia(augmented = True)
 	#print(np.shape(terrain.W[:,0:2]))
 	#print(terrain.func)
 	#for i in [-0.001,-0.002,-0.01,-0.02,-0.03,]:
