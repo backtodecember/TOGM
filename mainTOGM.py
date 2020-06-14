@@ -13,6 +13,7 @@ from trajoptlib.utility import show_sol
 from scipy.sparse import coo_matrix
 import math
 from robosimian_GM_simulation import robosimianSimulator
+from robosimian_wrapper import robosimian
 import pdb
 import configs
 from klampt.math import vectorops as vo
@@ -125,14 +126,31 @@ problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 # problem.x0bd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
 # problem.xfbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
 
-######setting 14
+######setting 14 & 15 & 16
 problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-3]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [3]*15)]
 problem.ubd = [np.array([-300]*12),np.array([300]*12)]
 problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi]*12 + [-0.2]*15),np.array([0.05,1.1,0.3] + [math.pi]*12 + [0.2]*15)]
 problem.xfbd = [np.array([0.3,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
 
+class anklePoseConstr(NonlinearPointConstr):
+	def __init__(self):
 
+		lb = np.array([-0.2,-1.0,-0.2,-1.0,-0.2,-1.0,-0.2,-1.0])
+		ub = np.array([1.0]*8)
+		self.robot = robosimian()
+		NonlinearConstr.__init__(self,index = 0, nc = 8, nx = 30, nu = 12, np = 0 ,lb = lb, ub = ub)
 
+	def __callg__(self,x, F, G, row, col, rec, needg):
+		self.robot.set_q_2D_(x[0:15])
+		self.robot.set_q_dot_2D_(x[15:30])
+		p = self.robot.get_ankle_positions
+		F[:] = np.array([p[0][1],p[0][2],p[1][1],p[1][2],p[2][1],p[2][2],p[3][1],p[3][2]])
+		if needg:
+			partial_Jp = self.robot.compute_Jp_Partial()
+			Jp = []
+			for i in range(8):
+				Jp.append(partial_Jp[i]+[0]*15)
+			G[:] = Jp
 
 class cyclicConstr(LinearConstr):
 	def __init__(self):
@@ -168,7 +186,8 @@ class transportationCost(NonLinearObj):
 		self.NofJoints = 12
 		self.first_u = 30
 		NonLinearObj.__init__(self,nsol = self.N*(self.nX+self.nU+self.nP),nG = self.N*(self.nX+self.nU)-self.N*self.first_q_dot +2  )
-
+		#setting 16
+		self.scale = 100.0
 		#print(self.N*(self.nX+self.nU)-self.N*self.first_q_dot +2)
 	def __callg__(self,x, F, G, row, col, rec, needg):
 		effort_sum = 0.0
@@ -177,7 +196,7 @@ class transportationCost(NonLinearObj):
 				#q_dot * u
 				effort_sum = effort_sum + (x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
 					x[i*(self.nX+self.nU+self.nP)+self.first_u+j])**2
-		F[:] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])
+		F[:] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])/self.scale
 		if needg:
 			Gs = []
 			nonzeros = [0]
@@ -212,7 +231,7 @@ class transportationCost(NonLinearObj):
 					Gs.append(2.0/d*(x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]**2)*\
 						x[i*(self.nX+self.nU+self.nP)+self.first_u+j])
 					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j+self.NofJoints)
-			G[:] = Gs
+			G[:] = Gs/self.scale
 			if rec:
 				row[:] = [0]
 				col[:] = nonzeros
@@ -238,28 +257,35 @@ class transportationCost(NonLinearObj):
 # problem.addNonLinearObj(c)
 # problem.addLinearConstr(constr1)
 
-#settting 14
-c = transportationCost()
-problem.addNonLinearObj(c)
+#settting 14 & 15
+# c = transportationCost()
+# problem.addNonLinearObj(c)
+
+#setting 16
+constr1 = anklePoseConstr()
+c = transportationCost() the 
+problem.addNonLinearObj(c) 
+problem.addNonlinearPointConstr(constr1,path = True)
+
 
 startTime = time.time()
 problem.preProcess()
 print('preProcess took:',time.time() - startTime)
 #print_level 1 for SNOPT is verbose enough
 #print_level 0-12 for IPOPT 5 is appropriate, 6 more detailed
-cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 1000000)
+cfg = OptConfig(backend='knitro', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 1000000)
 slv = OptSolver(problem, cfg)
 
 #setting 12
 #slv.solver.setWorkspace(4000000,5000000)
-
-#setting 14
-slv.solver.setWorkspace(7000000,8000000)
-
-startTime = time.time()
+#setting 14,15
+# slv.solver.setWorkspace(7000000,8000000)
 
 
-# #setting 1-13
+
+
+
+###setting 1-13
 # traj_guess = []
 # u_guess = []
 # for i in range(N):
@@ -268,16 +294,14 @@ startTime = time.time()
 # 	traj_guess.append(tmp)
 # 	u_guess.append(single_u_guess)
 #guess = problem.genGuessFromTraj(X= np.array(traj_guess), U=np.array(u_guess), t0 = 0, tf = tf)
-
-#setting 14
+###setting 14,15
 traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
 u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
 guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
+###setting 16
 
-# result = problem.parseF(guess)
-#print(result)
-#pdb.set_trace()
-#print(guess)
+
+startTime = time.time()
 iteration = 5
 rst = slv.solve_guess(guess)
 sol = problem.parse_sol(rst.sol.copy())
