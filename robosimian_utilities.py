@@ -14,7 +14,6 @@ import multiprocessing as mp
 class granularMedia:
 	def __init__(self,material = "sand",print_level = 0,augmented = False,extrapolation = False):
 		self.extrapolation = extrapolation #linearly scale the wrench torque
-		#self.extrapolation_factor = 2.5
 		self.print_level = print_level
 		self.augmented = augmented
 		if augmented:
@@ -26,13 +25,17 @@ class granularMedia:
 			self.material_range = [-0.07,0.9]
 			#self.W = np.load('data/sandPolyevenWAugmented.npy') #this one does not have the zeros
 			if self.extrapolation:
-				self.W = np.load('data/sandPolyevenWAugmented3.npy')
-				self.theta = np.load('data/sandPolyevenThetaAugmented3.npy')
+				#this one has magnitudes multiplied by 2
+				# self.W = np.load('data/sandPolyevenWAugmented3.npy')
+				# self.theta = np.load('data/sandPolyevenThetaAugmented3.npy')
+				#this one is similar to 3 , but with different augmented theats for zero wrench
+				self.W = np.load('data/sandPolyevenWAugmented4.npy')
+				self.theta = np.load('data/sandPolyevenThetaAugmented4.npy')
 			else:
+				#2 does not have the magnitudes multiplied
 				self.W = np.load('data/sandPolyevenWAugmented2.npy')
 				self.theta = np.load('data/sandPolyevenThetaAugmented2.npy')
-			# if self.extrapolation:
-			# 	self.W = self.W*self.extrapolation_factor
+
 			self.func = 4 #polyeven
 			self.eta = 2
 
@@ -41,7 +44,7 @@ class granularMedia:
 			#self.scale = 17.0
 			self.scale = 5.0
 			
-			self.Ntheta = 168
+			self.Ntheta = 103 #168 for 2,3
 		else:
 			if material == "sand":
 				mat_contents = sio.loadmat('data/data&weightsSand.mat')

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import logging
 from trajoptlib.io import get_onoff_args
 from trajoptlib import System, NonLinearPointObj, LqrObj
-from trajoptlib import LinearConstr,NonLinearObj
+from trajoptlib import LinearConstr,NonLinearObj,NonLinearPointConstr
 from trajoptlib import TrajOptProblem
 from trajoptlib import OptConfig, OptSolver
 from trajoptlib.utility import show_sol
@@ -24,7 +24,9 @@ class Robosimian(System):
 		q_2D = np.array([0.0,1.02,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
 	 		+[0.6+1.5708,0.0,-0.6])[np.newaxis].T
 		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
-		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = 0.005,solver = 'cvxpy', augmented = True)
+
+		#Test 14+ should have extraploation set to be True
+		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = 0.005,solver = 'cvxpy', augmented = True, extrapolation = True)
 
 	def dyn(self,t,x,u,p=None):  
 		a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
@@ -108,8 +110,7 @@ problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 # diff = [2]*15
 # #be lax on the x bounds
 # problem.xbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
-# problem.ubd = [np.array([-100]*12),np.array([100]*12)]
-
+# problem.ubd = [np.array([-100]*12),np.array([100]*12)]		#self.extrapolation_factor = 2.5
 # x0lower = vo.sub(single_traj_guess,[0]+[0.005]*14+[2]*15)
 # x0upper = vo.add(single_traj_guess,[0]+[0.005]*14+[2]*15)
 # problem.x0bd = [np.array(x0lower),np.array(x0upper)]
@@ -130,27 +131,33 @@ problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-3]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [3]*15)]
 problem.ubd = [np.array([-300]*12),np.array([300]*12)]
 problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi]*12 + [-0.2]*15),np.array([0.05,1.1,0.3] + [math.pi]*12 + [0.2]*15)]
-problem.xfbd = [np.array([0.3,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
+problem.xfbd = [np.array([0.4,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
 
-class anklePoseConstr(NonlinearPointConstr):
+class anklePoseConstr(NonLinearPointConstr):
 	def __init__(self):
 
 		lb = np.array([-0.2,-1.0,-0.2,-1.0,-0.2,-1.0,-0.2,-1.0])
 		ub = np.array([1.0]*8)
 		self.robot = robosimian()
-		NonlinearConstr.__init__(self,index = 0, nc = 8, nx = 30, nu = 12, np = 0 ,lb = lb, ub = ub)
+		NonLinearPointConstr.__init__(self,index = 0, nc = 8, nx = 30, nu = 12, np = 0 ,lb = lb, ub = ub, nG = 40)
 
 	def __callg__(self,x, F, G, row, col, rec, needg):
+		#first column of G is w.r.t. to time
 		self.robot.set_q_2D_(x[0:15])
 		self.robot.set_q_dot_2D_(x[15:30])
-		p = self.robot.get_ankle_positions
+		p = self.robot.get_ankle_positions()
 		F[:] = np.array([p[0][1],p[0][2],p[1][1],p[1][2],p[2][1],p[2][2],p[3][1],p[3][2]])
 		if needg:
+			r = [0]*5 + [1]*5 + [2]*5 + [3]*5 + [4]*5 + [5]*5 + [6]*5 + [7]*5 
+			c = [2,3,4,5,6] + [2,3,4,5,6] + [2,3,7,8,9] + [2,3,7,8,9] + [2,3,10,11,12] + [2,3,10,11,12] + [2,3,13,14,15] + [2,3,13,14,15]
+			if rec:
+				row[:] = r
+				col[:] = c
 			partial_Jp = self.robot.compute_Jp_Partial()
-			Jp = []
-			for i in range(8):
-				Jp.append(partial_Jp[i]+[0]*15)
-			G[:] = Jp
+			Gs = []
+			for (i,j) in zip(r,c):
+				Gs.append(partial_Jp[i,j-1])
+			G[:] = Gs
 
 class cyclicConstr(LinearConstr):
 	def __init__(self):
@@ -231,9 +238,9 @@ class transportationCost(NonLinearObj):
 					Gs.append(2.0/d*(x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]**2)*\
 						x[i*(self.nX+self.nU+self.nP)+self.first_u+j])
 					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j+self.NofJoints)
-			G[:] = Gs/self.scale
+			G[:] = vo.div(Gs,self.scale)
 			if rec:
-				row[:] = [0]
+				row[:] = 0
 				col[:] = nonzeros
 
 #####Original setting
@@ -263,25 +270,34 @@ class transportationCost(NonLinearObj):
 
 #setting 16
 constr1 = anklePoseConstr()
-c = transportationCost() the 
+c = transportationCost()
 problem.addNonLinearObj(c) 
-problem.addNonlinearPointConstr(constr1,path = True)
+problem.addNonLinearPointConstr(constr1,path = True)
 
 
 startTime = time.time()
 problem.preProcess()
 print('preProcess took:',time.time() - startTime)
+
+##Optimizer parameter setting
 #print_level 1 for SNOPT is verbose enough
 #print_level 0-12 for IPOPT 5 is appropriate, 6 more detailed
-cfg = OptConfig(backend='knitro', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 1000000)
-slv = OptSolver(problem, cfg)
-
+#cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 1000000)
+#slv = OptSolver(problem, cfg)
 #setting 12
 #slv.solver.setWorkspace(4000000,5000000)
 #setting 14,15
-# slv.solver.setWorkspace(7000000,8000000)
+#slv.solver.setWorkspace(7000000,8000000)
 
 
+#setting for using knitros
+#cfg = OptConfig(backend='knitro', print_file='temp_files/tmp.out', opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5)
+
+#1014 maxIter,1023 is featol  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
+options = {'1014':200,'1023':1e-4,'1027':1e-4,'1016':2,'1033':1,'history':True}
+#options = {'history':False}
+cfg = OptConfig(backend = 'knitro', **options)
+slv = OptSolver(problem, cfg)
 
 
 
@@ -294,41 +310,41 @@ slv = OptSolver(problem, cfg)
 # 	traj_guess.append(tmp)
 # 	u_guess.append(single_u_guess)
 #guess = problem.genGuessFromTraj(X= np.array(traj_guess), U=np.array(u_guess), t0 = 0, tf = tf)
-###setting 14,15
-traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
-u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+
+###setting 14,15,16
+#traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
+#u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+traj_guess = np.load('results/16/run1/solution_x61.npy')
+u_guess = np.load('results/16/run1/solution_u61.npy')
 guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
-###setting 16
+
 
 
 startTime = time.time()
-iteration = 5
-rst = slv.solve_guess(guess)
-sol = problem.parse_sol(rst.sol.copy())
-np.save('temp_files/solution_u'+str(iteration),sol['u'])
-np.save('temp_files/solution_x'+str(iteration),sol['x'])
-print(str(iteration)+ 'iterations completed')
-for i in range(29):
-	iteration += 5
-	rst = slv.solver.solve_more(5)
-	sol = problem.parse_sol(rst.sol.copy())
-	np.save('temp_files/solution_u'+str(iteration),sol['u'])
-	np.save('temp_files/solution_x'+str(iteration),sol['x'])
-	print(str(iteration)+ 'iterations completed')
+# iteration = 5
+# rst = slv.solve_guess(guess)
+# sol = problem.parse_sol(rst.sol.copy())
+# np.save('temp_files/solution_u'+str(iteration),sol['u'])
+# np.save('temp_files/solution_x'+str(iteration),sol['x'])
+# print(str(iteration)+ 'iterations completed')
+# for i in range(19):
+# 	iteration += 5
+# 	rst = slv.solver.solve_more(5)
+# 	sol = problem.parse_sol(rst.sol.copy())
+# 	np.save('temp_files/solution_u'+str(iteration),sol['u'])
+# 	np.save('temp_files/solution_x'+str(iteration),sol['x'])
+# 	print(str(iteration)+ 'iterations completed')
 
-#rst = slv.solve_rand()
+rst = slv.solve_guess(guess)
+(m,n) = np.shape(rst.history)
+for i in range(m):
+	sol = problem.parse_sol(rst.history[i,:])
+	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
+	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
+
+
 print('Took', time.time() - startTime)
 print("========results=======")
-# print(rst.flag)
-# print(rst.fval,np.shape(rst.fval))
-# print(rst.sol,np.shape(rst.sol))
-# print(np.shape(rst.lmd))
-# sol = problem.parse_sol(rst.sol.copy())
-# print(sol)
 
-np.save('temp_files/solution_u',sol['u'])
-np.save('temp_files/solution_x',sol['x'])
-# if rst.flag == 1:
-# 	print(rst.flag)
-# 	sol = problem.parse_sol(rst.sol.copy())
-# 	show_sol(sol)
+# np.save('temp_files/solution_u',sol['u'])
+# np.save('temp_files/solution_x',sol['x'])
