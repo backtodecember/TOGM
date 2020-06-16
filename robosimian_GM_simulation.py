@@ -45,7 +45,7 @@ import multiprocessing as mp
 
 class robosimianSimulator:
 	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01, solver = 'cvxpy',print_level = 0, \
-		augmented = True, RL = False, extrapolation = False):
+		augmented = True, RL = False, extrapolation = False, integrate_dt = 0.01):
 
 		self.robot = robosimian(print_level = print_level, RL = RL)
 		self.q = q
@@ -54,6 +54,7 @@ class robosimianSimulator:
 		self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
 		self.compute_pool = mp.Pool(4)
 		self.dt = dt
+		self.integrate_dt = integrate_dt
 		self.time = 0
 
 		self.Dx = 30 
@@ -313,7 +314,7 @@ class robosimianSimulator:
 				# start_time = time.time()
 
 
-				#mosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
+				#smosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
 				#self.prob.solve(solver=cp.MOSEK,mosek_params = mosek_param,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
 				
 				self.prob.solve(solver=cp.MOSEK,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
@@ -331,8 +332,9 @@ class robosimianSimulator:
 
 				x_k = self.x.value[0:12]
 				wc = x_k
-
-
+				#debug
+				#print('ground reaction force',x_k)
+				#print(A[0:26])
 				if self.RL:
 					print('ground reaction force',x_k)
 					print('ankle poses:',self.ankle_poses)
@@ -429,7 +431,7 @@ class robosimianSimulator:
 					if self.print_level == 1:
 						print('fixed joint torques',fixed_joint_torques)
 				if continuous_simulation:
-					self.q_dot = self.C.value+self.D.value@wc
+					self.q_dot = C*self.integrate_dt + self.q_dot+D@wc*self.integrate_dt
 
 			elif self.solver == 'mpqp':
 
@@ -457,16 +459,15 @@ class robosimianSimulator:
 				#v_k_1 = self.q_dot + C + D@A@w2
 				#print('objectove value:',v_k_1.T@M@v_k_1)
 				wc = A@w2
-				v
 
 				if continuous_simulation:
-					self.q_dot = C*self.dt+D@wc*self.dt
+					self.q_dot = C*self.integrate_dt+D@wc*self.integrate_dt #? Is this wrong
 
 
 		else:
 			#### uncomment this to have a continuous simulation....
 			if continuous_simulation:
-				self.q_dot = C*self.dt + self.q_dot
+				self.q_dot = C*self.integrate_dt + self.q_dot
 			##TODO: Compute the Jocabian here
 			if SA:
 				dadx = self._contactFreeDynamics(C,D,u)
@@ -476,7 +477,9 @@ class robosimianSimulator:
 		#### uncomment this to have a continuous simulation....
 		
 		if continuous_simulation:
-			self.q = self.q_dot*self.dt+self.q
+			self.q = self.q_dot*self.integrate_dt+self.q
+			self.robot.set_q_2D_(self.q.ravel().tolist())
+			self.robot.set_q_dot_2D_(self.q_dot.ravel().tolist())
 			if self.print_level == 1:
 				print('current q:',self.q)
 
@@ -506,10 +509,11 @@ class robosimianSimulator:
 		else:
 			return 
 
-	def simulate(self,total_time,plot = False, fixed = True):
+	def simulate(self,total_time,plot = False, fixed = True,visualize = False):
 		world = self.robot.get_world()
-		vis.add("world",world)
-		vis.show()
+		if visualize:
+			vis.add("world",world)
+			vis.show()
 
 		time.sleep(3)
 
@@ -520,21 +524,39 @@ class robosimianSimulator:
 		u2 = [-33.85296297, -20.91288138, -0.9837711 , -33.41402916, -20.41161062 ,\
 			-0.4201634 , -33.38633294 ,-20.41076484 , -0.44616818 ,-33.82823062,\
 			-20.90921505 , -1.00117092]
+
+		x_list = []
+		u_list = []
+		time_list = []
 		#while passed_time < total_time:
-		while simulation_time < total_time:
-			vis.lock()
+		while simulation_time < total_time+0.0001:
+			if visualize:
+				vis.lock()
 			# start = time.time()
 			#self.simulateOnce(np.array(u[iteration_counter]))#,iteration_counter)
 			#self.simulateOnce(u[iteration_counter%3])
-			self.simulateOnce(u1,continuous_simulation = True, fixed = fixed)
-			simulation_time = simulation_time + self.dt
+
+			_, t = self.simulateOnce(u1,continuous_simulation = True, fixed = fixed)
+			u_list.append(t)
+			x_list.append(self.q.ravel().tolist()+self.q_dot.ravel().tolist())
+			time_list.append(simulation_time)
+			simulation_time = simulation_time + self.integrate_dt
 			print(simulation_time)
 			print('current q:',self.q)
-			time.sleep(self.dt*10)
-			vis.unlock()
-			#time.sleep(self.dt*1.0)
-		vis.kill()
 
+			#time.sleep(self.dt*10)
+			#time.sleep(0.001)
+
+			if visualize:
+				vis.unlock()
+			#time.sleep(self.dt*1.0)
+		if visualize:
+			vis.kill()
+
+
+		np.save('x_init_guess.npy',np.array(x_list))
+		np.save('u_init_guess.npy',np.array(u_list))
+		np.save('time_init_guess.npy',np.array(time_list))
 
 	def simulateTraj(self,u_traj):
 		"""
@@ -805,7 +827,7 @@ class robosimianSimulator:
 if __name__=="__main__":
 
 	#q_2D = np.array(configs.q_staggered_augmented)[np.newaxis] #four feet on the ground at the same time
-	q_2D = np.array([0.0]*15)[np.newaxis]
+	q_2D = np.array(configs.q_test17)[np.newaxis]
 	# q_2D = np.array(configs.q_symmetric)[np.newaxis] #symmetric limbs
 	#print(q_2D)
 	#q_2D[0,3] = q_2D[0,3] + 0.5
@@ -815,7 +837,8 @@ if __name__=="__main__":
 
 	q_2D = q_2D.T
 	q_dot_2D = q_dot_2D.T
-	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'cvxpy',print_level = 1,augmented = True)
+	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, solver = 'cvxpy',print_level = 0,augmented = True,\
+		extrapolation = True,integrate_dt = 0.05)
 	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
 	# 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
 
@@ -825,9 +848,9 @@ if __name__=="__main__":
 	#print(t)
 	#print(configs.u)
 	#np.savetxt('staticTorque1',t)
-	#simulator.simulate(2, fixed = True)
-	simulator.debugSimulation()
-	#Q = np.array(configs.q_staggered_augmented + [0]*15)
-	#Q[3] = Q[3] + 0.5
-	#U = np.array(configs.u_augmented_mosek)
-	#a,j = simulator.getDynJac(Q, U)
+	simulator.simulate(9, fixed = True,visualize = True)
+	# simulator.debugSimulation()
+	# #Q = np.array(configs.q_staggered_augmented + [0]*15)
+	# #Q[3] = Q[3] + 0.5
+	# #U = np.array(configs.u_augmented_mosek)
+	# #a,j = simulator.getDynJac(Q, U)

@@ -20,13 +20,13 @@ from klampt.math import vectorops as vo
 import copy
 class Robosimian(System):
 	def __init__(self):
-		System.__init__(self,nx=30,nu=12,np=0,ode='BackEuler')
+		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
 		q_2D = np.array([0.0,1.02,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
 	 		+[0.6+1.5708,0.0,-0.6])[np.newaxis].T
 		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
 
 		#Test 14+ should have extraploation set to be True
-		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = 0.005,solver = 'cvxpy', augmented = True, extrapolation = True)
+		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = 0.05,solver = 'cvxpy', augmented = True, extrapolation = True, integrate_dt = 0.05)
 
 	def dyn(self,t,x,u,p=None):  
 		a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
@@ -127,7 +127,7 @@ problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 # problem.x0bd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
 # problem.xfbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
 
-######setting 14 & 15 & 16
+######setting 14 & 15 & 16 & 17
 problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-3]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [3]*15)]
 problem.ubd = [np.array([-300]*12),np.array([300]*12)]
 problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi]*12 + [-0.2]*15),np.array([0.05,1.1,0.3] + [math.pi]*12 + [0.2]*15)]
@@ -182,6 +182,26 @@ class cyclicConstr(LinearConstr):
 				A[i,i+(N-1)*(nX+nU+nP)] = -1.0
 		LinearConstr.__init__(self,A,lb = lb,ub = ub)
 
+
+class positiveTranslationConstr(LinearConstr):
+	def __init__(self):
+		global N
+		dmin = 0.4
+		dmax = 2000000.0
+		nX = 30
+		nU = 12
+		nP = 0
+		A = np.zeros((nX,N*(nX+nU+nP)))
+		lb = np.ones(nX)*-1.0
+		ub = np.ones(nX)
+		#enough x translation
+		A[0,0] = -1.0
+		A[0,0+(N-1)*(nX+nU+nP)] = 1.0
+		lb[0] = dmin
+		ub[0] = dmax
+		LinearConstr.__init__(self,A,lb = lb,ub = ub)
+
+
 class transportationCost(NonLinearObj):
 	def __init__(self):
 		self.nX = 30
@@ -195,6 +215,7 @@ class transportationCost(NonLinearObj):
 		NonLinearObj.__init__(self,nsol = self.N*(self.nX+self.nU+self.nP),nG = self.N*(self.nX+self.nU)-self.N*self.first_q_dot +2  )
 		#setting 16
 		self.scale = 100.0
+		self.small_C = 0.01
 		#print(self.N*(self.nX+self.nU)-self.N*self.first_q_dot +2)
 	def __callg__(self,x, F, G, row, col, rec, needg):
 		effort_sum = 0.0
@@ -203,7 +224,13 @@ class transportationCost(NonLinearObj):
 				#q_dot * u
 				effort_sum = effort_sum + (x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
 					x[i*(self.nX+self.nU+self.nP)+self.first_u+j])**2
-		F[:] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])/self.scale
+		# print('---')
+		# print('effort_sum is:',effort_sum)
+		# print('xf[0]:',x[(self.N-1)*(self.nX+self.nU+self.nP)])
+		# print('size of x is:',np.shape(x))
+		# print((self.N-1)*(self.nX+self.nU+self.nP))
+		# print('x0[0]:',x[0])
+		F[:] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)/self.scale
 		if needg:
 			Gs = []
 			nonzeros = [0]
@@ -268,11 +295,14 @@ class transportationCost(NonLinearObj):
 # c = transportationCost()
 # problem.addNonLinearObj(c)
 
-#setting 16
+#setting 16,17
 constr1 = anklePoseConstr()
 c = transportationCost()
 problem.addNonLinearObj(c) 
 problem.addNonLinearPointConstr(constr1,path = True)
+#setting 17
+constr2 = positiveTranslationConstr()
+problem.addLinearConstr(constr2)
 
 
 startTime = time.time()
@@ -294,7 +324,7 @@ print('preProcess took:',time.time() - startTime)
 #cfg = OptConfig(backend='knitro', print_file='temp_files/tmp.out', opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5)
 
 #1014 maxIter,1023 is featol  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
-options = {'1014':200,'1023':1e-4,'1027':1e-4,'1016':2,'1033':1,'history':True}
+options = {'1014':200,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'history':True}
 #options = {'history':False}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
@@ -314,10 +344,14 @@ slv = OptSolver(problem, cfg)
 ###setting 14,15,16
 #traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
 #u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
-traj_guess = np.load('results/16/run1/solution_x61.npy')
-u_guess = np.load('results/16/run1/solution_u61.npy')
-guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
+# traj_guess = np.load('results/16/run1/solution_x61.npy')
+# u_guess = np.load('results/16/run1/solution_u61.npy')
+# guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
+#setting 17
+traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
+u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
+guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 
 startTime = time.time()

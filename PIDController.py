@@ -17,10 +17,10 @@ q_2D[0:3] = [0,0.90,0]
 q_desried_0 = deepcopy(q_2D[3:15])
 q_2D = np.array(q_2D)[np.newaxis].T
 q_dot_2D = np.array([0.0]*15)[np.newaxis].T
-simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = dt, solver = 'cvxpy',print_level = 0,augmented = True,extrapolation = True)
+simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'cvxpy',print_level = 0,augmented = True,extrapolation = True, integrate_dt = dt)
 
 def target_q(time):
-	settle_time = 1.0
+	settle_time = 10.0
 	if time <= settle_time:
 		return q_desried_0
 	else:
@@ -72,8 +72,7 @@ while vis.shown() and (simulation_time < 10.001):
 	q_dot_history.append(simulator.getVel().tolist())
 	u_history.append(u.tolist())
 	time_history.append(simulation_time)
-	# if simulation_time > 0.02:
-	# 	u[11] = 5000.0
+
 	simulation_time += dt
 	vis.clearText()
 	vis.addText('time','time: '+str(simulation_time))
@@ -88,14 +87,14 @@ while vis.shown() and (simulation_time < 10.001):
 	simulator.simulateOnce(u,continuous_simulation = True)
 	print('Simulate Once took:',time.time() - simulate_start_time)
 	vis.unlock()
-	time.sleep(0.001)
+	time.sleep(0.2)
 
 
 
-np.save('results/PID_trajectory/2/q_history.npy',np.array(q_history))
-np.save('results/PID_trajectory/2/q_dot_history.npy',np.array(q_dot_history))
-np.save('results/PID_trajectory/2/u_history.npy',np.array(u_history))
-np.save('results/PID_trajectory/2/time_history.npy',np.array(time_history))
+# np.save('results/PID_trajectory/2/q_history.npy',np.array(q_history))
+# np.save('results/PID_trajectory/2/q_dot_history.npy',np.array(q_dot_history))
+# np.save('results/PID_trajectory/2/u_history.npy',np.array(u_history))
+# np.save('results/PID_trajectory/2/time_history.npy',np.array(time_history))
 
 simulator.closePool()
 vis.kill()
