@@ -17,7 +17,7 @@ class analyzer:
 		self.dt = dt
 		q0 = np.array(configs.q_staggered_augmented)[np.newaxis].T
 		q_dot0 = np.zeros((15,1))
-		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = 0.005, solver = 'cvxpy', augmented = True, extrapolation= True)
+		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = 0.05, solver = 'cvxpy', augmented = True, extrapolation= True)
 		self.case = case
 
 		if x_data != []:
@@ -112,6 +112,7 @@ class analyzer:
 		This is problem specific
 		"""
 		scale = 100.0
+		small_C = 0.01
 		#below is the transportation cost
 		effort_sum = 0.0
 		#print(self.N)
@@ -119,7 +120,7 @@ class analyzer:
 			for j in range(12):
 				#q_dot * u
 				effort_sum = effort_sum + (x[i,j+18]*u[i,j])**2
-		obj = effort_sum/(x[self.N -1 ,0] - x[0,0])/scale
+		obj = effort_sum/(x[self.N -1 ,0] - x[0,0] + small_C)/scale
 
 		return obj*0.05**2							
 
@@ -153,14 +154,21 @@ class analyzer:
 
 	def perIterationObj(self):
 		#iterations = [0,5,10,15,20,24,28,31,35,40,44,46,49,53,56,60,62,65,67,69,70]
-		iterations = [0,5,10,15,20,25,35,40,45,50,55,60]#,65,70]#,75,80,85,90,95,100,105,110,115]
+		#iterations = [0,5,10,15,20,25,35,40,45,50,55,60]#,65,70]#,75,80,85,90,95,100,105,110,115]
+
+		iterations = []
+		for i in range(41):
+			iterations.append(int(i*5))
 		objVals = []
 		for iter in iterations:
 			print('Iteration:',iter)
 			if iter == 0:
-				objVals.append(self.objective(self.x,self.u))
+				objVals.append(self.objective(np.load('results/PID_trajectory/3/x_init_guess.npy'),np.load('results/PID_trajectory/3/u_init_guess.npy')))
 			else:
-				objVals.append(self.objective(np.load('results/'+self.case+'/run1/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/run1/solution_u'+str(iter)+'.npy')))
+				#objVals.append(self.objective(np.load('results/'+self.case+'/run1/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/run1/solution_u'+str(iter)+'.npy')))
+				objVals.append(self.objective(np.load('results/'+self.case+'/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/solution_u'+str(iter)+'.npy')))
+
+		
 		plt.plot(iterations,objVals)
 		plt.title('Objective Values over Iterations')
 		plt.grid()
@@ -169,18 +177,51 @@ class analyzer:
 		plt.show()
 		return
 
+	def perIterGeneralConstrVio(self,type):
+		iterations = []
+		for i in range(41):
+			iterations.append(int(i*5))
+		if type == 'enough_translation':
+			violations = []
+			for iter in iterations:
+				if iter == 0:
+					x = np.load('results/PID_trajectory/3/x_init_guess.npy')
+					diff = x[-1,0] - x[0,0] - 0.4
+				else:
+					x = np.load('results/17/solution_x'+str(iteration)+'.npy')
+					diff = x[-1,0] - x[0,0] - 0.4
+
+				if diff < 0:
+					violations.append(-diff)
+				else:
+					violations.append(0.0)
+			
+		plt.plot(iterations,violations)
+		plt.title('Enough Translation Constraint Violations over Iterations')
+		plt.grid()
+		plt.ylabel('Violations')
+		plt.xlabel('Iterations')
+		plt.show()
+				
 
 
 	def perIterDynConstrVio(self):
 		#iterations = [0,5,10,15,20,24,28,31,35,40,44,46,49,53,56,60,62,65,67,69,70]
 		iterations = [0,5,10,15,20,25,35,40,45,50,55,60]#,65,70]#,75,80,85,90,95,100,105,110,115]
+		# iterations = []
+		# for i in range(21):
+		# 	iterations.append(int(i*10))
+
 		violations = []
 		for iter in iterations:
 			print('Iteration:',iter)
 			if iter == 0:
-				violations.append(self._dynConstrVio(self.x,self.u))
+				violations.append(self._dynConstrVio(np.load('results/PID_trajectory/2/x_init_guess.npy'),np.load('results/PID_trajectory/2/u_init_guess.npy')))
 			else:
 				violations.append(self._dynConstrVio(np.load('results/'+self.case+'/run1/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/run1/solution_u'+str(iter)+'.npy')))
+				#violations.append(self._dynConstrVio(np.load('results/'+self.case+'/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/solution_u'+str(iter)+'.npy')))
+
+		
 		plt.plot(iterations,violations)
 		plt.title('Dynamics Constraint Violations over Iterations')
 		plt.grid()
@@ -425,10 +466,11 @@ if __name__=="__main__":
 	##### code to evaluate the intial guess
 	# traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
 	# u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
-	##This is the dt = 0.005 PID trajectory
+	# #This is the dt = 0.005 PID trajectory
 	# traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_history.npy'),np.load('results/PID_trajectory/2/q_dot_history.npy')))
-	# u_guess = np.load('results/PID_trajectory/2/u_history.npy')
-	# analyzer = analyzer('',dt = 0.05,method = "BackEuler",x_data = traj_guess, u_data = u_guess)
+	# traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
+	# u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
+	# analyzer = analyzer('',dt = 0.05,method = "Euler",x_data = traj_guess, u_data = u_guess)
 	# analyzer.calculation()
 	# analyzer.animate()
 	# analyzer.dynConstrViolation()
@@ -437,10 +479,14 @@ if __name__=="__main__":
 	# print(traj_guess[-1,0])
 
 	##### code to evaluate an optimized trajectory
-	iteration =  60
-	traj = np.load('results/16/run1/solution_x'+str(iteration) +'.npy')
-	u = np.load('results/16/run1/solution_u'+str(iteration)+'.npy')
-	analyzer = analyzer('16',dt = 0.05,method = "BackEuler",x_data = traj, u_data = u)
+	iteration = 200
+	# traj = np.load('results/16/run1/solution_x'+str(iteration) +'.npy')
+	# u = np.load('results/16/run1/solution_u'+str(iteration)+'.npy')
+
+	traj = np.load('results/17/solution_x'+str(iteration) +'.npy')
+	u = np.load('results/17/solution_u'+str(iteration)+'.npy')
+
+	analyzer = analyzer('17',dt = 0.05,method = "Euler",x_data = traj, u_data = u)
 	analyzer.calculation()
 	analyzer.animate() #animate the trajectory
 	# print('objective is',analyzer.objective(traj,u_))
@@ -448,8 +494,10 @@ if __name__=="__main__":
 	# print('final torso x:',traj[-1,0])
 	#### plot the progress of optimization
 	####need to do special handling inside the class 
-	analyzer.perIterationObj()
-	analyzer.perIterDynConstrVio()
+	#analyzer.perIterationObj()
+	#analyzer.perIterGeneralConstrVio('enough_translation')
+	#analyzer.perIterDynConstrVio()
+
 
 
 	######## Track a trajectory with PID controller
