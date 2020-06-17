@@ -111,7 +111,7 @@ class analyzer:
 		"""
 		This is problem specific
 		"""
-		
+		scale = 100.0
 		#below is the transportation cost
 		effort_sum = 0.0
 		#print(self.N)
@@ -119,8 +119,9 @@ class analyzer:
 			for j in range(12):
 				#q_dot * u
 				effort_sum = effort_sum + (x[i,j+18]*u[i,j])**2
-		obj = effort_sum/(x[self.N -1 ,0] - x[0,0])
-		return obj*self.dt**2							
+		obj = effort_sum/(x[self.N -1 ,0] - x[0,0])/scale
+
+		return obj*0.05**2							
 
 	def otherConstr(self,type):
 		"""
@@ -151,16 +152,15 @@ class analyzer:
 			plt.show()
 
 	def perIterationObj(self):
-		self.N = self.N -1
 		#iterations = [0,5,10,15,20,24,28,31,35,40,44,46,49,53,56,60,62,65,67,69,70]
-		iterations = [0,5,10,15,20,25,35,40,45,50,55,60,65,70]#,75,80,85,90,95,100,105,110,115]
+		iterations = [0,5,10,15,20,25,35,40,45,50,55,60]#,65,70]#,75,80,85,90,95,100,105,110,115]
 		objVals = []
 		for iter in iterations:
 			print('Iteration:',iter)
 			if iter == 0:
 				objVals.append(self.objective(self.x,self.u))
 			else:
-				objVals.append(self.objective(np.load('results/'+self.case+'/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/solution_u'+str(iter)+'.npy')))
+				objVals.append(self.objective(np.load('results/'+self.case+'/run1/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/run1/solution_u'+str(iter)+'.npy')))
 		plt.plot(iterations,objVals)
 		plt.title('Objective Values over Iterations')
 		plt.grid()
@@ -172,16 +172,15 @@ class analyzer:
 
 
 	def perIterDynConstrVio(self):
-		self.N = self.N -1
 		#iterations = [0,5,10,15,20,24,28,31,35,40,44,46,49,53,56,60,62,65,67,69,70]
-		iterations = [0,5,10,15,20,25,35,40,45,50,55,60,65,70]#,75,80,85,90,95,100,105,110,115]
+		iterations = [0,5,10,15,20,25,35,40,45,50,55,60]#,65,70]#,75,80,85,90,95,100,105,110,115]
 		violations = []
 		for iter in iterations:
 			print('Iteration:',iter)
 			if iter == 0:
 				violations.append(self._dynConstrVio(self.x,self.u))
 			else:
-				violations.append(self._dynConstrVio(np.load('results/'+self.case+'/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/solution_u'+str(iter)+'.npy')))
+				violations.append(self._dynConstrVio(np.load('results/'+self.case+'/run1/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/run1/solution_u'+str(iter)+'.npy')))
 		plt.plot(iterations,violations)
 		plt.title('Dynamics Constraint Violations over Iterations')
 		plt.grid()
@@ -210,6 +209,7 @@ class analyzer:
 					violations += np.linalg.norm(np.concatenate((p_error,v_error)))
 		return violations/self.N
 
+#piece-wise constant trajectory
 class pcTraj:
 	def __init__(self,times,milestones):
 		self.times = times
@@ -422,17 +422,12 @@ class PIDTracker:
 
 if __name__=="__main__":
 
-	##### code to check the intial guess, and final trajectory
-	###This is the initial guess
+	##### code to evaluate the intial guess
 	# traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
 	# u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
 	##This is the dt = 0.005 PID trajectory
 	# traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_history.npy'),np.load('results/PID_trajectory/2/q_dot_history.npy')))
 	# u_guess = np.load('results/PID_trajectory/2/u_history.npy')
-	##This is the optimized trajectory
-	# iteration = 70
-	# traj_guess = np.hstack((np.load('results/15/solution_x'+str(iteration) +'.npy'),np.load('results/15/solution_x'+str(iteration) +'.npy')))
-	# u_guess = np.load('results/15/solution_u'+str(iteration)+'.npy')
 	# analyzer = analyzer('',dt = 0.05,method = "BackEuler",x_data = traj_guess, u_data = u_guess)
 	# analyzer.calculation()
 	# analyzer.animate()
@@ -441,6 +436,25 @@ if __name__=="__main__":
 	# print(traj_guess[0,0])
 	# print(traj_guess[-1,0])
 
+	##### code to evaluate an optimized trajectory
+	iteration =  60
+	traj = np.load('results/16/run1/solution_x'+str(iteration) +'.npy')
+	u = np.load('results/16/run1/solution_u'+str(iteration)+'.npy')
+	analyzer = analyzer('16',dt = 0.05,method = "BackEuler",x_data = traj, u_data = u)
+	analyzer.calculation()
+	analyzer.animate() #animate the trajectory
+	# print('objective is',analyzer.objective(traj,u_))
+	# print('initial torso x:',traj[0,0])
+	# print('final torso x:',traj[-1,0])
+	#### plot the progress of optimization
+	####need to do special handling inside the class 
+	analyzer.perIterationObj()
+	analyzer.perIterDynConstrVio()
+
+
+	######## Track a trajectory with PID controller
+
+	##------ initial trajectory -------##
 
 	##### code to generate the PID tracked trajectory of initial guess(with large dt)
 	# traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
@@ -459,6 +473,7 @@ if __name__=="__main__":
 	# print(traj_guess[-1,0])
 
 
+	## ----- an optimized trajectory ----- ##
 
 	##### code to generate PID tracked trajectory of the optimized result(with large dt)
 	# iteration = 70
@@ -467,22 +482,16 @@ if __name__=="__main__":
 	# tracker = PIDTracker('15',True,traj_dt=0.05,x_data = traj_guess,u_data = u_guess, initial =False)
 	# tracker.run()
 
-	#### code to check the progress of optimization
-	####need to do special handling inside the class ... unfortunately
 
-	traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
-	u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
-	analyzer = analyzer('15',dt = 0.05,method = "BackEuler",x_data = traj_guess, u_data = u_guess)
-	analyzer.perIterationObj()
-	analyzer.perIterDynConstrVio()
 
 	#print('objective is',analyzer.objective(traj_guess,u_guess))
 
 	##### code to check optimized trajectory tracked by PID controller
-	# iteration = 30
-	# traj_guess = np.hstack((np.load('results/14/PIDTracked_q_'+str(iteration) +'.npy'),np.load('results/14/PIDTracked_q_dot_'+str(iteration) +'.npy')))
-	# u_guess = np.load('results/14/PIDTracked_u_'+str(iteration)+'.npy')
-	# analyzer = analyzer('',dt = 0.005,method = "Euler",x_data = traj_guess, u_data = u_guess)
+	# iteration = 70
+	# traj_guess = np.hstack((np.load('results/15/PIDTracked_q_'+str(iteration) +'.npy'),np.load('results/15/PIDTracked_q_dot_'+str(iteration) +'.npy')))
+	# u_guess = np.load('results/15/PIDTracked_u_'+str(iteration)+'.npy')
+	# analyzer = analyzer('',dt = 0.005,method = "BackEuler",x_data = traj_guess, u_data = u_guess)
 	# print('objective is',analyzer.objective(traj_guess,u_guess))
 	# print(traj_guess[0,0])
 	# print(traj_guess[-1,0])
+
