@@ -20,7 +20,7 @@ from klampt.math import vectorops as vo
 import copy
 class Robosimian(System):
 	def __init__(self):
-		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
+		System.__init__(self,nx=30,nu=12,np=0,ode='BackEuler')
 		q_2D = np.array([0.0,1.02,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
 	 		+[0.6+1.5708,0.0,-0.6])[np.newaxis].T
 		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
@@ -301,8 +301,8 @@ c = transportationCost()
 problem.addNonLinearObj(c) 
 problem.addNonLinearPointConstr(constr1,path = True)
 #setting 17
-constr2 = positiveTranslationConstr()
-problem.addLinearConstr(constr2)
+# constr2 = positiveTranslationConstr()
+# problem.addLinearConstr(constr2)
 
 
 startTime = time.time()
@@ -320,9 +320,7 @@ print('preProcess took:',time.time() - startTime)
 #slv.solver.setWorkspace(7000000,8000000)
 
 
-#setting for using knitros
-#cfg = OptConfig(backend='knitro', print_file='temp_files/tmp.out', opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5)
-
+#setting for using knitros, test 16,17
 #1014 maxIter,1023 is featol  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
 options = {'1014':200,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'history':True}
 #options = {'history':False}
@@ -342,16 +340,17 @@ slv = OptSolver(problem, cfg)
 #guess = problem.genGuessFromTraj(X= np.array(traj_guess), U=np.array(u_guess), t0 = 0, tf = tf)
 
 ###setting 14,15,16
-#traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
-#u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
+u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
 # traj_guess = np.load('results/16/run1/solution_x61.npy')
 # u_guess = np.load('results/16/run1/solution_u61.npy')
-# guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
+guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 #setting 17
-traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
-u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
-guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
+# traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
+# u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
+# guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
+
 
 
 startTime = time.time()
