@@ -12,6 +12,7 @@ from klampt.model import trajectory
 from klampt.math import vectorops as vo
 import time
 import matplotlib.pyplot as plt
+import math
 class analyzer:
 	def __init__(self,case = '11-2',dt = 0.005,method = "Euler",x_data = [],u_data = []):
 		self.dt = dt
@@ -157,16 +158,16 @@ class analyzer:
 		#iterations = [0,5,10,15,20,25,35,40,45,50,55,60]#,65,70]#,75,80,85,90,95,100,105,110,115]
 
 		iterations = []
-		for i in range(41):
+		for i in range(17):
 			iterations.append(int(i*5))
 		objVals = []
 		for iter in iterations:
 			print('Iteration:',iter)
 			if iter == 0:
-				objVals.append(self.objective(np.load('results/PID_trajectory/3/x_init_guess.npy'),np.load('results/PID_trajectory/3/u_init_guess.npy')))
+				objVals.append(self.objective(np.load('results/PID_trajectory/2/x_init_guess.npy'),np.load('results/PID_trajectory/2/u_init_guess.npy')))
 			else:
-				#objVals.append(self.objective(np.load('results/'+self.case+'/run1/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/run1/solution_u'+str(iter)+'.npy')))
-				objVals.append(self.objective(np.load('results/'+self.case+'/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/solution_u'+str(iter)+'.npy')))
+				objVals.append(self.objective(np.load('results/'+self.case+'/run3/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/run3/solution_u'+str(iter)+'.npy')))
+				#objVals.append(self.objective(np.load('results/'+self.case+'/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/solution_u'+str(iter)+'.npy')))
 
 		
 		plt.plot(iterations,objVals)
@@ -188,29 +189,65 @@ class analyzer:
 					x = np.load('results/PID_trajectory/3/x_init_guess.npy')
 					diff = x[-1,0] - x[0,0] - 0.4
 				else:
-					x = np.load('results/17/solution_x'+str(iteration)+'.npy')
+					x = np.load('results/17/solution_x'+str(iter)+'.npy')
 					diff = x[-1,0] - x[0,0] - 0.4
 
 				if diff < 0:
 					violations.append(-diff)
 				else:
 					violations.append(0.0)
-			
-		plt.plot(iterations,violations)
-		plt.title('Enough Translation Constraint Violations over Iterations')
-		plt.grid()
-		plt.ylabel('Violations')
-		plt.xlabel('Iterations')
-		plt.show()
+					plt.plot(iterations,violations)
+			plt.title('Enough Translation Constraint Violations over Iterations')
+			plt.grid()
+			plt.ylabel('Violations')
+			plt.xlabel('Iterations')
+			plt.show()
+		elif type == 'ankle_pose':
+			from robosimian_wrapper import robosimian
+			robot = robosimian()	
+			lb = np.array([-0.2,-1.0,-0.2,-1.0,-0.2,-1.0,-0.2,-1.0])
+			ub = np.array([1.0]*8)	
+			violations = []					
+			for iter in iterations:
+				if iter == 0:
+					Xs = np.load('results/PID_trajectory/3/x_init_guess.npy')
+				else:
+					Xs = np.load('results/17/solution_x'+str(iter)+'.npy')
+					#Xs = np.load('results/16/run3/solution_x'+str(iter)+'.npy')
+				violation = 0
+				for x in Xs: 
+					robot.set_q_2D_(x[0:15])
+					robot.set_q_dot_2D_(x[15:30])
+					p = robot.get_ankle_positions()
+					p = np.array([p[0][1],p[0][2],p[1][1],p[1][2],p[2][1],p[2][2],p[3][1],p[3][2]])
+					error = 0		
+					for i in range(8):
+						if p[i] > ub[i]:
+							error += (p[i] - ub[i])**2
+						if p[i] < lb[i]:
+							error += (lb[i] - p[i])**2
 				
+					violation  += math.sqrt(error)
+				violations.append(violation/self.N)
+
+			plt.plot(iterations,violations)
+			plt.title('Ankle Pose Constraint Violations over Iterations')
+			plt.grid()
+			plt.ylabel('Violations')
+			plt.xlabel('Iterations')
+			plt.show()
 
 
+		print(violations)
+			
+
+			
 	def perIterDynConstrVio(self):
 		#iterations = [0,5,10,15,20,24,28,31,35,40,44,46,49,53,56,60,62,65,67,69,70]
-		iterations = [0,5,10,15,20,25,35,40,45,50,55,60]#,65,70]#,75,80,85,90,95,100,105,110,115]
-		# iterations = []
-		# for i in range(21):
-		# 	iterations.append(int(i*10))
+		#iterations = [0,5,10,15,20,25,35,40,45,50,55,60]#,65,70]#,75,80,85,90,95,100,105,110,115]
+		iterations = []
+		for i in range(17):
+			iterations.append(int(i*5))
 
 		violations = []
 		for iter in iterations:
@@ -218,7 +255,7 @@ class analyzer:
 			if iter == 0:
 				violations.append(self._dynConstrVio(np.load('results/PID_trajectory/2/x_init_guess.npy'),np.load('results/PID_trajectory/2/u_init_guess.npy')))
 			else:
-				violations.append(self._dynConstrVio(np.load('results/'+self.case+'/run1/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/run1/solution_u'+str(iter)+'.npy')))
+				violations.append(self._dynConstrVio(np.load('results/'+self.case+'/run3/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/run3/solution_u'+str(iter)+'.npy')))
 				#violations.append(self._dynConstrVio(np.load('results/'+self.case+'/solution_x'+str(iter)+'.npy'),np.load('results/'+self.case+'/solution_u'+str(iter)+'.npy')))
 
 		
@@ -479,16 +516,16 @@ if __name__=="__main__":
 	# print(traj_guess[-1,0])
 
 	##### code to evaluate an optimized trajectory
-	iteration = 200
-	# traj = np.load('results/16/run1/solution_x'+str(iteration) +'.npy')
-	# u = np.load('results/16/run1/solution_u'+str(iteration)+'.npy')
+	iteration = 30
+	traj = np.load('results/16/run3/solution_x'+str(iteration) +'.npy')
+	u = np.load('results/16/run3/solution_u'+str(iteration)+'.npy')
 
-	traj = np.load('results/17/solution_x'+str(iteration) +'.npy')
-	u = np.load('results/17/solution_u'+str(iteration)+'.npy')
+	# traj = np.load('results/17/solution_x'+str(iteration) +'.npy')
+	# u = np.load('results/17/solution_u'+str(iteration)+'.npy')
 
-	analyzer = analyzer('17',dt = 0.05,method = "Euler",x_data = traj, u_data = u)
-	analyzer.calculation()
-	analyzer.animate() #animate the trajectory
+	analyzer = analyzer('16',dt = 0.05,method = "Euler",x_data = traj, u_data = u)
+	#analyzer.calculation()
+	#analyzer.animate() #animate the trajectory
 	# print('objective is',analyzer.objective(traj,u_))
 	# print('initial torso x:',traj[0,0])
 	# print('final torso x:',traj[-1,0])
@@ -496,6 +533,7 @@ if __name__=="__main__":
 	####need to do special handling inside the class 
 	#analyzer.perIterationObj()
 	#analyzer.perIterGeneralConstrVio('enough_translation')
+	analyzer.perIterGeneralConstrVio('ankle_pose')
 	#analyzer.perIterDynConstrVio()
 
 
