@@ -142,9 +142,9 @@ class anklePoseConstr(NonLinearPointConstr):
 		NonLinearPointConstr.__init__(self,index = 0, nc = 8, nx = 30, nu = 12, np = 0 ,lb = lb, ub = ub, nG = 40)
 
 	def __callg__(self,x, F, G, row, col, rec, needg):
-		#first column of G is w.r.t. to time
-		self.robot.set_q_2D_(x[0:15])
-		self.robot.set_q_dot_2D_(x[15:30])
+		#first col of x is time
+		self.robot.set_q_2D_(x[1:16])
+		self.robot.set_q_dot_2D_(x[16:31])
 		p = self.robot.get_ankle_positions()
 		F[:] = np.array([p[0][1],p[0][2],p[1][1],p[1][2],p[2][1],p[2][2],p[3][1],p[3][2]])
 		if needg:
@@ -215,6 +215,8 @@ class transportationCost(NonLinearObj):
 		NonLinearObj.__init__(self,nsol = self.N*(self.nX+self.nU+self.nP),nG = self.N*(self.nX+self.nU)-self.N*self.first_q_dot +2  )
 		#setting 16
 		self.scale = 100.0
+
+		#TODO, need to modify the gradient for adding small_C
 		self.small_C = 0.0
 		#print(self.N*(self.nX+self.nU)-self.N*self.first_q_dot +2)
 	def __callg__(self,x, F, G, row, col, rec, needg):
@@ -237,10 +239,10 @@ class transportationCost(NonLinearObj):
 			# for i in range(self.N):
 			# 	for j in range(self.first_q_dot):
 			# 		G[i*(self.nX+self.nU+self.nP)+j] = 0.0
-			Gs.append(effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2)
+			Gs.append(effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
 			#G[0] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2
 			#G[(self.N-1)*(self.nX+self.nU+self.nP)] = -effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2
-			d = x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]
+			d = x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C
 			for i in range(self.N-1):
 				for j in range(self.NofJoints):
 					# G[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j] = 2.0*x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
@@ -254,7 +256,7 @@ class transportationCost(NonLinearObj):
 					Gs.append(2.0/d*(x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]**2)*\
 						x[i*(self.nX+self.nU+self.nP)+self.first_u+j])
 					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j+self.NofJoints)
-			Gs.append(-effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2)
+			Gs.append(-effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
 			nonzeros.append((self.N-1)*(self.nX+self.nU+self.nP))
 			for i in [self.N-1]:
 				for j in range(self.NofJoints):
@@ -312,20 +314,20 @@ print('preProcess took:',time.time() - startTime)
 ##Optimizer parameter setting
 #print_level 1 for SNOPT is verbose enough
 #print_level 0-12 for IPOPT 5 is appropriate, 6 more detailed
-cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 2000000)
-slv = OptSolver(problem, cfg)
+#cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 10000000)
+# cfg = OptConfig(backend='ipopt', print_file='temp_files/tmp.out', print_level = 5, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,deriv_check = True)
+# slv = OptSolver(problem, cfg)
 #setting 12
 #slv.solver.setWorkspace(4000000,5000000)
 #setting 14,15,18
-slv.solver.setWorkspace(7000000,8000000)
+#slv.solver.setWorkspace(7000000,8000000)
 
 
 #setting for using knitros, test 16,17
 #1014 maxIter,1023 is featol  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
-# options = {'1014':200,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'history':True}
-# #options = {'history':False}
-# cfg = OptConfig(backend = 'knitro', **options)
-# slv = OptSolver(problem, cfg)
+options = {'1014':200,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'history':True}
+cfg = OptConfig(backend = 'knitro', **options)
+slv = OptSolver(problem, cfg)
 
 
 
@@ -340,44 +342,50 @@ slv.solver.setWorkspace(7000000,8000000)
 #guess = problem.genGuessFromTraj(X= np.array(traj_guess), U=np.array(u_guess), t0 = 0, tf = tf)
 
 ###setting 14,15,16,18
-traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
-u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
-# traj_guess = np.load('results/16/run1/solution_x61.npy')
-# u_guess = np.load('results/16/run1/solution_u61.npy')
-guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
-
-#setting 17
-# traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
-# u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
+# traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
+# u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+# # traj_guess = np.load('results/16/run1/solution_x61.npy')
+# # u_guess = np.load('results/16/run1/solution_u61.npy')
 # guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
+#setting 17
+traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
+u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
+guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
+
+##some debug code
+# _,G,row,col =problem.eval_g(guess)
+# mask = (row == 5401) & (col == 0)
+# print(G[mask])
 
 startTime = time.time()
 
 ## setting for using SNOPT
-iteration = 5
-rst = slv.solve_guess(guess)
-sol = problem.parse_sol(rst.sol.copy())
-np.save('temp_files/solution_u'+str(iteration),sol['u'])
-np.save('temp_files/solution_x'+str(iteration),sol['x'])
-print(str(iteration)+ 'iterations completed')
-for i in range(29):
-	iteration += 5
-	rst = slv.solver.solve_more(5)
-	sol = problem.parse_sol(rst.sol.copy())
-	np.save('temp_files/solution_u'+str(iteration),sol['u'])
-	np.save('temp_files/solution_x'+str(iteration),sol['x'])
-	print(str(iteration)+ 'iterations completed')
+# iteration = 5
+# rst = slv.solve_guess(guess)
+# sol = problem.parse_sol(rst.sol.copy())
+# np.save('temp_files/solution_u'+str(iteration),sol['u'])
+# np.save('temp_files/solution_x'+str(iteration),sol['x'])
+# print(str(iteration)+ 'iterations completed')
+# for i in range(29):
+# 	iteration += 5
+# 	rst = slv.solver.solve_more(5)
+# 	sol = problem.parse_sol(rst.sol.copy())
+# 	np.save('temp_files/solution_u'+str(iteration),sol['u'])
+# 	np.save('temp_files/solution_x'+str(iteration),sol['x'])
+# 	print(str(iteration)+ 'iterations completed')
 
 
 ##setting for using Knitro
-# rst = slv.solve_guess(guess)
-# (m,n) = np.shape(rst.history)
-# for i in range(m):
-# 	sol = problem.parse_sol(rst.history[i,:])
-# 	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
-# 	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
+rst = slv.solve_guess(guess)
+(m,n) = np.shape(rst.history)
+for i in range(m):
+	sol = problem.parse_sol(rst.history[i,:])
+	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
+	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
+
+
 
 
 print('Took', time.time() - startTime)
