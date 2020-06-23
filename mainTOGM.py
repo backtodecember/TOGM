@@ -354,7 +354,7 @@ startTime = time.time()
 #setting before 19
 # problem.preProcess()
 #setting 19
-problem.pre_process(dyn_tol = 0.005)
+problem.pre_process(dyn_tol = 0.005,snopt_mode = False)
 print('preProcess took:',time.time() - startTime)
 
 ##Optimizer parameter setting
@@ -370,9 +370,10 @@ print('preProcess took:',time.time() - startTime)
 
 
 ##setting for using knitros, test 16,17
-##1014 maxIter,1023 is featol  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
+##1014 maxIter,1023 is featol_abs  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
 ##1015 is the output level 1003 is the algorithm 
-options = {'1014':60,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'history':True}
+##1022 is the feastol_relative 1027 is opttol
+options = {'1014':60,'1023':1e-4,'1016':2,'1033':0,'1003':1,'1022':1e-4,'1027':1e-4,'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
 
@@ -398,7 +399,7 @@ slv = OptSolver(problem, cfg)
 #setting 17,19
 traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
 u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
-guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf,obj = [0,16.0])
+guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 
 ###debug code
