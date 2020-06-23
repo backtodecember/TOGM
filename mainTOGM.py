@@ -354,27 +354,27 @@ startTime = time.time()
 #setting before 19
 # problem.preProcess()
 #setting 19
-problem.pre_process(dyn_tol = 0.005)
+problem.pre_process()
 print('preProcess took:',time.time() - startTime)
 
 ##Optimizer parameter setting
 #print_level 1 for SNOPT is verbose enough
 #print_level 0-12 for IPOPT 5 is appropriate, 6 more detailed
-#cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 10000000)
+cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 10000000)
 # cfg = OptConfig(backend='ipopt', print_file='temp_files/tmp.out', print_level = 5, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,deriv_check = True)
-# slv = OptSolver(problem, cfg)
+slv = OptSolver(problem, cfg)
 #setting 12
 #slv.solver.setWorkspace(4000000,5000000)
 #setting 14,15,18
 #slv.solver.setWorkspace(7000000,8000000)
-
+slv.solver.setWorkspace(12000000,12000000)
 
 ##setting for using knitros, test 16,17
 ##1014 maxIter,1023 is featol  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
 ##1015 is the output level 1003 is the algorithm 
-options = {'1014':60,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'history':True}
-cfg = OptConfig(backend = 'knitro', **options)
-slv = OptSolver(problem, cfg)
+# options = {'1014':60,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'history':True}
+# cfg = OptConfig(backend = 'knitro', **options)
+# slv = OptSolver(problem, cfg)
 
 
 
@@ -398,7 +398,7 @@ slv = OptSolver(problem, cfg)
 #setting 17,19
 traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
 u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
-guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf,obj = [0,16.0])
+guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 
 ###debug code
@@ -439,40 +439,40 @@ if debug_flag:
 startTime = time.time()
 
 ## setting for using SNOPT
-# iteration = 5
-# rst = slv.solve_guess(guess)
-# sol = problem.parse_sol(rst.sol.copy())
-# np.save('temp_files/solution_u'+str(iteration),sol['u'])
-# np.save('temp_files/solution_x'+str(iteration),sol['x'])
-# print(str(iteration)+ 'iterations completed')
-# for i in range(29):
-# 	iteration += 5
-# 	rst = slv.solver.solve_more(5)
-# 	sol = problem.parse_sol(rst.sol.copy())
-# 	np.save('temp_files/solution_u'+str(iteration),sol['u'])
-# 	np.save('temp_files/solution_x'+str(iteration),sol['x'])
-# 	print(str(iteration)+ 'iterations completed')
+iteration = 5
+rst = slv.solve_guess(guess)
+sol = problem.parse_sol(rst.sol.copy())
+np.save('temp_files/solution_u'+str(iteration),sol['u'])
+np.save('temp_files/solution_x'+str(iteration),sol['x'])
+print(str(iteration)+ 'iterations completed')
+for i in range(9):
+	iteration += 5
+	rst = slv.solver.solve_more(5)
+	sol = problem.parse_sol(rst.sol.copy())
+	np.save('temp_files/solution_u'+str(iteration),sol['u'])
+	np.save('temp_files/solution_x'+str(iteration),sol['x'])
+	print(str(iteration)+ 'iterations completed')
 
 
 ##setting for using Knitro
-rst = slv.solve_guess(guess)
-i = 0
-for history in rst.history:
-	sol = problem.parse_sol(history['x'])
-	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
-	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
+# rst = slv.solve_guess(guess)
+# i = 0
+# for history in rst.history:
+# 	sol = problem.parse_sol(history['x'])
+# 	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
+# 	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
 
-	### This saves everything from the optimizer
-	np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
-	np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
+# 	### This saves everything from the optimizer
+# 	np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
+# 	np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
 
-	### 
-	# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
-	# parsed_result = problem.parse_f(result_0)
-	# np.save('temp_files/solverlib_obj.npy',np.array(parsed_result['obj']))
-	# np.save('temp_files/solverlib_con.npy',parsed_result['path'][0])
+# 	### 
+# 	# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
+# 	# parsed_result = problem.parse_f(result_0)
+# 	# np.save('temp_files/solverlib_obj.npy',np.array(parsed_result['obj']))
+# 	# np.save('temp_files/solverlib_con.npy',parsed_result['path'][0])
 	
-	i += 1
+# 	i += 1
 
 
 print('Took', time.time() - startTime)
