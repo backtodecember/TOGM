@@ -1,6 +1,6 @@
 """
 This file includes the class of methods for visualizing and analyzing the results from 
-a trajectory optimizer
+a trajectory optimizer by only using the optimize x and u
 """
 import numpy as np
 from robosimian_GM_simulation import robosimianSimulator
@@ -516,16 +516,16 @@ if __name__=="__main__":
 	# print(traj_guess[-1,0])
 
 	##### code to evaluate an optimized trajectory
-	iteration = 30
-	traj = np.load('results/16/run3/solution_x'+str(iteration) +'.npy')
-	u = np.load('results/16/run3/solution_u'+str(iteration)+'.npy')
+	iteration = 10
+	traj = np.load('results/17/run3/solution_x'+str(iteration) +'.npy')
+	u = np.load('results/17/run3/solution_u'+str(iteration)+'.npy')
 
 	# traj = np.load('results/17/solution_x'+str(iteration) +'.npy')
 	# u = np.load('results/17/solution_u'+str(iteration)+'.npy')
 
-	analyzer = analyzer('16',dt = 0.05,method = "Euler",x_data = traj, u_data = u)
-	#analyzer.calculation()
-	#analyzer.animate() #animate the trajectory
+	analyzer = analyzer('17',dt = 0.05,method = "BackEuler",x_data = traj, u_data = u)
+	analyzer.calculation()
+	analyzer.animate() #animate the trajectory
 	# print('objective is',analyzer.objective(traj,u_))
 	# print('initial torso x:',traj[0,0])
 	# print('final torso x:',traj[-1,0])
@@ -533,7 +533,7 @@ if __name__=="__main__":
 	####need to do special handling inside the class 
 	#analyzer.perIterationObj()
 	#analyzer.perIterGeneralConstrVio('enough_translation')
-	analyzer.perIterGeneralConstrVio('ankle_pose')
+	#analyzer.perIterGeneralConstrVio('ankle_pose')
 	#analyzer.perIterDynConstrVio()
 
 

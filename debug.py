@@ -264,32 +264,54 @@ if __name__=="__main__":
 	# print('The gradient from FD here is:',G_FD_full[np.argmax(diff)])
 	# print('The gradient from user G here is:',G_auto_full[np.argmax(diff)])
 
-	traj = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
-	u = np.load('results/PID_trajectory/2/u_init_guess.npy')
-	cost = anklePoseConstr()
-	nnz = 40
-	nG_full = 8*43
-	max_diffs = []
-	for iter1 in range(181):
-		x = np.array([])
-		x = np.concatenate((x,traj[iter1,:],u[iter1,:]))
-		F = np.zeros(8)
-		G = np.zeros(nnz)
-		row = np.zeros(nnz,dtype = 'int')
-		col = np.zeros(nnz,dtype = 'int')
-		cost.__callg__(x, F, G, row, col, rec = True, needg = True)
+	##### this is to look at the anklePoseConstr
+	# traj = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
+	# u = np.load('results/PID_trajectory/2/u_init_guess.npy')
+	# cost = anklePoseConstr()
+	# nnz = 40
+	# nG_full = 8*43
+	# max_diffs = []
+	# for iter1 in range(181):
+	# 	x = np.array([])
+	# 	x = np.concatenate((x,traj[iter1,:],u[iter1,:]))
+	# 	F = np.zeros(8)
+	# 	G = np.zeros(nnz)
+	# 	row = np.zeros(nnz,dtype = 'int')
+	# 	col = np.zeros(nnz,dtype = 'int')
+	# 	cost.__callg__(x, F, G, row, col, rec = True, needg = True)
 
-		G_auto = coo_matrix((G,(row,col)),shape = (8,43))
-		G_auto_full = G_auto.toarray()[:,1:43].flatten()
+	# 	G_auto = coo_matrix((G,(row,col)),shape = (8,43))
+	# 	G_auto_full = G_auto.toarray()[:,1:43].flatten()
 
-		eps = 1e-6
-		diffs = []
-		for i in range(42):
-			FD_vector = np.zeros(42)
-			FD_vector[i] = eps
-			new_F = np.zeros(8)
-			cost.__callg__(x+FD_vector, new_F, G, row, col, rec = False, needg = False)	 
-			diff = (new_F[0]-F[0])
-			diffs.append(max(diff.min(), diff.max(), key=abs))
-		max_diffs.append((np.max(np.array(diffs))))	
-	print(np.max(np.array(max_diffs)))
+	# 	eps = 1e-6
+	# 	diffs = []
+	# 	for i in range(42):
+	# 		FD_vector = np.zeros(42)
+	# 		FD_vector[i] = eps
+	# 		new_F = np.zeros(8)
+	# 		cost.__callg__(x+FD_vector, new_F, G, row, col, rec = False, needg = False)	 
+	# 		diff = (new_F[0]-F[0])
+	# 		diffs.append(max(diff.min(), diff.max(), key=abs))
+	# 	max_diffs.append((np.max(np.array(diffs))))	
+	# print(np.max(np.array(max_diffs)))
+
+
+	knitro_obj = np.load('debug/knitro_obj.npy')
+	knitro_con = np.load('debug/knitro_con.npy')
+
+	solverlib_obj = np.load('debug/solverlib_obj.npy')
+	solverlib_con = np.load('debug/solverlib_con.npy')
+
+	print('knitro obj:',knitro_obj)
+	#print('solverlib obj:',solverlib_obj)
+
+	x = np.load('debug/solution_x2.npy')
+	u = np.load('debug/solution_u2.npy')
+
+	print('x0[0],xf[0]',x[0,0],x[-1,0])
+	#The first of the constraints is the objective value
+	#The last of the constraints is something added by trajOptLib
+	dyn_constr = knitro_con[1:5401]
+	print('Max Dynamics Constr:',np.sort(np.array(dyn_constr)))
+	print('Ankle Pose Constr:',knitro_con[5401:5401+181*8])
+	print('Enough Translation Constr:',knitro_con[5401+181*8:5401+181*8+1])

@@ -1,0 +1,94 @@
+WARNING: 2 finite variable bounds are >= bndrange in magnitude.
+         These bounds will be treated as infinite in Knitro.
+         To impose as finite bounds, increase bndrange user option.
+WARNING: 2 finite constraint bounds are >= bndrange in magnitude.
+         These bounds will be treated as infinite in Knitro.
+         To impose as finite bounds, increase bndrange user option.
+
+=======================================
+          Commercial License
+         Artelys Knitro 12.2.0
+=======================================
+
+Knitro presolve eliminated 0 variables and 1 constraint.
+
+algorithm:               2
+bar_feasible:            3
+cg_maxit:               50
+feastol_abs:             0.0001
+maxit:                   20
+opttol:                  0.0001
+outlev:                  3
+outmode:                 2
+par_concurrent_evals:    0
+Knitro changing bar_initpt from AUTO to 3.
+Knitro changing bar_murule from AUTO to 1.
+Knitro changing bar_penaltycons from AUTO to 2.
+Knitro changing bar_penaltyrule from AUTO to 2.
+Knitro changing bar_switchrule from AUTO to 0.
+Knitro changing linesearch from AUTO to 1.
+Knitro changing linsolver from AUTO to 4.
+
+Problem Characteristics                                 (   Presolved)
+-----------------------
+Objective goal:  Minimize
+Objective type:  general
+Number of variables:                               7603 (        7603)
+    bounded below only:                               0 (           0)
+    bounded above only:                               0 (           0)
+    bounded below and above:                       7602 (        7602)
+    fixed:                                            0 (           0)
+    free:                                             1 (           1)
+Number of constraints:                             6880 (        8357)
+    linear equalities:                                0 (           0)
+    quadratic equalities:                             0 (           0)
+    gen. nonlinear equalities:                     5401 (        5401)
+    linear one-sided inequalities:                    0 (           0)
+    quadratic one-sided inequalities:                 0 (           0)
+    gen. nonlinear one-sided inequalities:            1 (        2956)
+    linear two-sided inequalities:                    0 (           0)
+    quadratic two-sided inequalities:                 0 (           0)
+    gen. nonlinear two-sided inequalities:         1478 (           0)
+Number of nonzeros in Jacobian:                  243790 (      251031)
+Number of nonzeros in Hessian:                        0 (           0)
+
+  Iter      Objective      FeasError   OptError    ||Step||    CGits 
+--------  --------------  ----------  ----------  ----------  -------
+       0    2.534627e-01   4.000e-01
+       1    7.324137e-02   5.650e+00   1.276e+05   5.536e+00        1
+       2    1.390966e-01   1.834e+02   2.629e+05   1.690e+01        7
+       3    1.355132e-01   1.609e+03   2.272e+05   6.567e+01       19
+       4    1.350673e-01   1.750e+03   3.180e+05   1.288e+01       21
+       5    1.092084e-01   1.775e+03   2.814e+05   3.318e+01       12
+       6    1.158879e-01   1.869e+03   3.212e+05   1.281e+01       10
+       7    1.231774e-01   1.020e+03   1.472e+05   1.824e+01        7
+       8    1.712749e-01   1.093e+03   2.173e+05   1.395e+01        6
+       9    2.488228e-01   6.131e+02   4.024e+05   1.502e+01        5
+      10    3.763214e-01   6.515e+02   5.216e+05   1.441e+01        4
+      11    8.539724e-01   4.657e+02   2.859e+05   3.716e+01        4
+      12    9.187705e-01   4.604e+02   4.634e+05   6.793e+00       50
+      13    1.069950e+00   1.981e+02   9.003e+05   1.027e+01       50
+      14    1.230151e+00   1.974e+02   8.622e+05   6.981e+00       50
+      15    1.378023e+00   1.935e+02   1.368e+06   6.084e+00       50
+      16    1.583472e+00   1.932e+02   1.135e+06   7.792e+00       50
+      17    1.834627e+00   1.917e+02   1.063e+06   1.025e+01       50
+      18    2.108580e+00   1.915e+02   9.039e+05   9.404e+00       52
+      19    2.559617e+00   1.928e+02   1.532e+06   1.579e+01       12
+      20    2.984677e+00   1.940e+02   1.361e+06   1.424e+01       21
+
+EXIT: Iteration limit reached. Current point is infeasible.
+
+Final Statistics
+----------------
+Final objective value               =   2.98467709127332e+00
+Final feasibility error (abs / rel) =   1.94e+02 / 1.94e+02
+Final optimality error  (abs / rel) =   1.36e+06 / 1.36e+06
+# of iterations                     =         20 
+# of CG iterations                  =        481 
+# of function evaluations           =         24
+# of gradient evaluations           =         22
+Total program time (secs)           =    3121.02466 ( 54131.070 CPU time)
+Time spent in evaluations (secs)    =    2983.79053
+
+===============================================================================
+
