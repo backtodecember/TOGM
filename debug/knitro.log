@@ -1,0 +1,75 @@
+WARNING: 2 finite variable bounds are >= bndrange in magnitude.
+         These bounds will be treated as infinite in Knitro.
+         To impose as finite bounds, increase bndrange user option.
+WARNING: 2 finite constraint bounds are >= bndrange in magnitude.
+         These bounds will be treated as infinite in Knitro.
+         To impose as finite bounds, increase bndrange user option.
+
+=======================================
+          Commercial License
+         Artelys Knitro 12.2.0
+=======================================
+
+Knitro presolve eliminated 0 variables and 1 constraint.
+
+algorithm:               2
+bar_feasible:            3
+cg_maxit:               50
+feastol_abs:             0.0001
+maxit:                   1
+opttol:                  0.0001
+outlev:                  3
+outmode:                 2
+par_concurrent_evals:    0
+Knitro changing bar_initpt from AUTO to 3.
+Knitro changing bar_murule from AUTO to 1.
+Knitro changing bar_penaltycons from AUTO to 2.
+Knitro changing bar_penaltyrule from AUTO to 2.
+Knitro changing bar_switchrule from AUTO to 0.
+Knitro changing linesearch from AUTO to 1.
+Knitro changing linsolver from AUTO to 4.
+
+Problem Characteristics                                 (   Presolved)
+-----------------------
+Objective goal:  Minimize
+Objective type:  general
+Number of variables:                               7603 (        7603)
+    bounded below only:                               0 (           0)
+    bounded above only:                               0 (           0)
+    bounded below and above:                       7602 (        7602)
+    fixed:                                            0 (           0)
+    free:                                             1 (           1)
+Number of constraints:                             6880 (        8357)
+    linear equalities:                                0 (           0)
+    quadratic equalities:                             0 (           0)
+    gen. nonlinear equalities:                     5401 (        5401)
+    linear one-sided inequalities:                    0 (           0)
+    quadratic one-sided inequalities:                 0 (           0)
+    gen. nonlinear one-sided inequalities:            1 (        2956)
+    linear two-sided inequalities:                    0 (           0)
+    quadratic two-sided inequalities:                 0 (           0)
+    gen. nonlinear two-sided inequalities:         1478 (           0)
+Number of nonzeros in Jacobian:                  243790 (      251031)
+Number of nonzeros in Hessian:                        0 (           0)
+
+  Iter      Objective      FeasError   OptError    ||Step||    CGits 
+--------  --------------  ----------  ----------  ----------  -------
+       0    7.281006e-02   4.000e-01
+       1    2.229944e-02   5.649e+00   1.168e+05   5.533e+00        1
+
+EXIT: Iteration limit reached. Current point is infeasible.
+
+Final Statistics
+----------------
+Final objective value               =   2.22994397836453e-02
+Final feasibility error (abs / rel) =   5.65e+00 / 5.65e+00
+Final optimality error  (abs / rel) =   1.17e+05 / 1.17e+05
+# of iterations                     =          1 
+# of CG iterations                  =          1 
+# of function evaluations           =          4
+# of gradient evaluations           =          3
+Total program time (secs)           =     472.78537 (  8231.450 CPU time)
+Time spent in evaluations (secs)    =     337.73373
+
+===============================================================================
+

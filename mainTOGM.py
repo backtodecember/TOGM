@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import logging
 from trajoptlib.io import get_onoff_args
-from trajoptlib import System, NonLinearPointObj, LqrObj
+from trajoptlib import System, NonLinearPointObj, LqrObj,LinearObj
 from trajoptlib import LinearConstr,NonLinearObj,NonLinearPointConstr
 from trajoptlib import TrajOptProblem
 from trajoptlib import OptConfig, OptSolver
@@ -20,7 +20,7 @@ from klampt.math import vectorops as vo
 import copy
 class Robosimian(System):
 	def __init__(self):
-		System.__init__(self,nx=30,nu=12,np=0,ode='BackEuler')
+		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
 		q_2D = np.array([0.0,1.02,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
 	 		+[0.6+1.5708,0.0,-0.6])[np.newaxis].T
 		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
@@ -128,10 +128,17 @@ problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
 # problem.xfbd = [np.array(vo.sub(single_traj_guess[0:15],diff) + [-2]*15),np.array(vo.add(single_traj_guess[0:15],diff) + [2]*15)]
 
 ######setting 14 & 15 & 16 & 17 & 18
+# problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-3]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [3]*15)]
+# problem.ubd = [np.array([-300]*12),np.array([300]*12)]
+# problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi]*12 + [-0.2]*15),np.array([0.05,1.1,0.3] + [math.pi]*12 + [0.2]*15)]
+# problem.xfbd = [np.array([0.4,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
+
+##setting 19
 problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-3]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [3]*15)]
 problem.ubd = [np.array([-300]*12),np.array([300]*12)]
 problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi]*12 + [-0.2]*15),np.array([0.05,1.1,0.3] + [math.pi]*12 + [0.2]*15)]
-problem.xfbd = [np.array([0.4,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
+problem.xfbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
+
 
 class anklePoseConstr(NonLinearPointConstr):
 	def __init__(self):
@@ -201,6 +208,36 @@ class positiveTranslationConstr(LinearConstr):
 		ub[0] = dmax
 		LinearConstr.__init__(self,A,lb = lb,ub = ub)
 
+class enoughTranslationCost(NonLinearObj):
+	def __init__(self):
+		self.nX = 30
+		self.nU = 12
+		self.nP = 0
+		self.d = 0.4
+		self.C = 100.0
+		global N
+		self.N = N
+		NonLinearObj.__init__(self,nsol = self.N*(self.nX+self.nU+self.nP),nG = 2  )
+
+	def __callg__(self,x, F, G, row, col, rec, needg):
+		x0 = x[0]
+		xf = x[(self.N-1)*(self.nX+self.nU+self.nP)]
+		if (xf-x0) >= self.d:
+			F[:] = 0
+		else:
+			F[:] = self.C*(xf-x0-0.4)**2
+
+		if needg:
+			col_entries = [0,(self.N-1)*(self.nX+self.nU+self.nP)]
+			if (xf-x0) >= self.d:
+				Gs = [0.0,0.0]
+			else:
+				Gs = [-self.C*(xf-x0-0.4),self.C*(xf-x0-0.4)]
+			G[:] = Gs
+			if rec:
+				row[:] = [0,0]
+				col[:] = col_entries
+
 
 class transportationCost(NonLinearObj):
 	def __init__(self):
@@ -264,7 +301,7 @@ class transportationCost(NonLinearObj):
 					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j+self.NofJoints)
 			G[:] = vo.div(Gs,self.scale)
 			if rec:
-				row[:] = 0
+				row[:] = [0]*len(nonzeros)
 				col[:] = nonzeros
 
 #####Original setting
@@ -292,18 +329,32 @@ class transportationCost(NonLinearObj):
 # c = transportationCost()
 # problem.addNonLinearObj(c)
 
-#setting 16,17, 18
+# #setting 16,17, 18
+# constr1 = anklePoseConstr()
+# c = transportationCost()
+# problem.addNonLinearObj(c) 
+# problem.addNonLinearPointConstr(constr1,path = True)
+# #setting 17, 16 run4
+# constr2 = positiveTranslationConstr()
+# problem.addLinearConstr(constr2)
+
+#setting 19
+c1 = transportationCost()
+c2 = enoughTranslationCost()
 constr1 = anklePoseConstr()
-c = transportationCost()
-problem.addNonLinearObj(c) 
+problem.addNonLinearObj(c1)
+problem.addNonLinearObj(c2)
 problem.addNonLinearPointConstr(constr1,path = True)
-#setting 17
-constr2 = positiveTranslationConstr()
-problem.addLinearConstr(constr2)
+
+
 
 
 startTime = time.time()
-problem.preProcess()
+
+#setting before 19
+# problem.preProcess()
+#setting 19
+problem.pre_process(dyn_tol = 0.005)
 print('preProcess took:',time.time() - startTime)
 
 ##Optimizer parameter setting
@@ -321,7 +372,7 @@ print('preProcess took:',time.time() - startTime)
 ##setting for using knitros, test 16,17
 ##1014 maxIter,1023 is featol  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
 ##1015 is the output level 1003 is the algorithm 
-options = {'1014':10,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'1015':4,'1003':4,'history':True}
+options = {'1014':60,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
 
@@ -344,10 +395,10 @@ slv = OptSolver(problem, cfg)
 # # u_guess = np.load('results/16/run1/solution_u61.npy')
 # guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
-#setting 17
+#setting 17,19
 traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
 u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
-guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
+guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf,obj = [0,16.0])
 
 
 ###debug code
@@ -359,19 +410,22 @@ if debug_flag:
 	# u = np.load('results/17/run2/solution_u'+str(iteration)+'.npy')
 	# guess = problem.genGuessFromTraj(X= traj, U= u, t0 = 0, tf = tf)
 	parsed_result = problem.parse_f(guess)
-	# for key, value in parsed_result.items() :
-	# 	print(key,value,np.shape(value))
+	for key, value in parsed_result.items() :
+		print(key,value,np.shape(value))
 
 	#np.save('temp_files/solverlib_obj0.npy',np.array(parsed_result['obj']))
 	np.save('temp_files/knitro_obj0.npy',np.array([0.0]))
 	dyn_constr = np.array(parsed_result['dyn']).flatten()
 	ankle_constr = parsed_result['path'][0].flatten()
-	print(np.shape(dyn_constr),np.shape(ankle_constr),np.shape(np.array([0.0])))
-	print(type(dyn_constr),type(ankle_constr),type(np.array([0.0])))
+	#print(np.shape(dyn_constr),np.shape(ankle_constr),np.shape(np.array([0.0])))
+	#print(type(dyn_constr),type(ankle_constr),type(np.array([0.0])))
 	np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
 
+	xbound = parsed_result['Xbd']
+	ubound = parsed_result['Ubd']
+	print(np.max(xbound),np.min(xbound),np.max(ubound),np.min(ubound))
 
-	# print('dyn:',parsed_result['dyn'])
+	#print('dyn:',parsed_result['dyn'])
 	# print('path:',parsed_result['path'])
 	# print('obj:',parsed_result['obj'])
 	# print(np.shape(parsed_result['dyn']))
@@ -379,7 +433,7 @@ if debug_flag:
 	# print(np.max(dyn))
 	# print('path:',parsed_result['path'])
 	# print(np.shape(parsed_result['path'][0]))
-	# exit()
+	#exit()
 
 
 startTime = time.time()

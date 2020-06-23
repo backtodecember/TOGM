@@ -132,7 +132,7 @@ class analyzer2:
 				constr_values = np.load(prefix+str(i)+'.npy')
 				#remove the first and last
 				constr_values = constr_values[1:6879]
-
+			print(np.shape(constr_values))
 			#parse the constraint values
 			violation = []
 			N_of_dyn = 5400
@@ -153,18 +153,20 @@ class analyzer2:
 					if angle < -1.0:
 						violation.append(-1.0-angle)
 
-			if constr_values[N_of_dyn+181*8] > 0.4:
-				violation.append(0.0)
-			else:
-				violation.append(0.4 - constr_values[N_of_dyn+181*8])
+			# if constr_values[N_of_dyn+181*8] > 0.4:
+			# 	violation.append(0.0)
+			# else:
+			# 	violation.append(0.4 - constr_values[N_of_dyn+181*8])
 
 
+			print(constr_values[6848])
 			dyn_constr_violations.append(np.linalg.norm(violation))
-			dyn_constr_violations_l1.append(np.linalg.norm(violation,ord = 1))
+			dyn_constr_violations_l1.append(np.max(np.absolute(violation)))
 
+			print(dyn_constr_violations,dyn_constr_violations_l1)
 		##plotting
 		plt.plot(iterations,dyn_constr_violations,iterations,dyn_constr_violations_l1)
-		plt.legend(['2-norm','1-norm'])
+		plt.legend(['2-norm','Max Violation'])
 		plt.title('Constraint Violations over Iterations')
 		plt.grid()
 		plt.ylabel('Constraint Violation')
@@ -403,11 +405,11 @@ class PIDTracker:
 		return self.ref_trajectory.eval(time,True)
 
 if __name__=="__main__":
-	x = np.load('results/17/run3/solution_x1.npy')
-	u = np.load('results/17/run3/solution_u1.npy')
+	x = np.load('results/17/run4/solution_x1.npy')
+	u = np.load('results/17/run4/solution_u1.npy')
 	analyzer = analyzer2(x,u,case = '17',run = '3',dt = 0.05,method = "BackEuler")
-	analyzer.perIterationConstrVio(101,'results/17/run3/knitro_con')
-	analyzer.perIterationObj(101,'results/17/run3/knitro_obj')
+	analyzer.perIterationConstrVio(1,'temp_files/knitro_con')
+	#analyzer.perIterationObj(11,'results/16/run4/knitro_obj')
 
 
 

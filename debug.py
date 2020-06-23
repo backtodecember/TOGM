@@ -296,22 +296,22 @@ if __name__=="__main__":
 	# print(np.max(np.array(max_diffs)))
 
 
-	knitro_obj = np.load('debug/knitro_obj.npy')
-	knitro_con = np.load('debug/knitro_con.npy')
+	# knitro_obj = np.load('debug/knitro_obj.npy')
+	# knitro_con = np.load('debug/knitro_con.npy')
 
-	solverlib_obj = np.load('debug/solverlib_obj.npy')
-	solverlib_con = np.load('debug/solverlib_con.npy')
+	# solverlib_obj = np.load('debug/solverlib_obj.npy')
+	# solverlib_con = np.load('debug/solverlib_con.npy')
 
-	print('knitro obj:',knitro_obj)
-	#print('solverlib obj:',solverlib_obj)
+	# print('knitro obj:',knitro_obj)
+	# #print('solverlib obj:',solverlib_obj)
 
-	x = np.load('debug/solution_x2.npy')
-	u = np.load('debug/solution_u2.npy')
+	# x = np.load('debug/solution_x2.npy')
+	# u = np.load('debug/solution_u2.npy')
 
-	print('x0[0],xf[0]',x[0,0],x[-1,0])
-	#The first of the constraints is the objective value
-	#The last of the constraints is something added by trajOptLib
-	dyn_constr = knitro_con[1:5401]
-	print('Max Dynamics Constr:',np.sort(np.array(dyn_constr)))
-	print('Ankle Pose Constr:',knitro_con[5401:5401+181*8])
-	print('Enough Translation Constr:',knitro_con[5401+181*8:5401+181*8+1])
+	# print('x0[0],xf[0]',x[0,0],x[-1,0])
+	# #The first of the constraints is the objective value
+	# #The last of the constraints is something added by trajOptLib
+	# dyn_constr = knitro_con[1:5401]
+	# print('Max Dynamics Constr:',np.sort(np.array(dyn_constr)))
+	# print('Ankle Pose Constr:',knitro_con[5401:5401+181*8])
+	# print('Enough Translation Constr:',knitro_con[5401+181*8:5401+181*8+1])
