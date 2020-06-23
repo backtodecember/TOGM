@@ -264,17 +264,22 @@ class transportationCost(NonLinearObj):
 				effort_sum = effort_sum + (x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
 					x[i*(self.nX+self.nU+self.nP)+self.first_u+j])**2
 				# print(effort_sum)
-		F[:] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)/self.scale
+		if math.fabs(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C) < 1e-10:
+			F[:] = 0
+		else:
+			F[:] = effort_sum/math.fabs(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)/self.scale
 		if needg:
 			Gs = []
 			nonzeros = [0]
 			# for i in range(self.N):
 			# 	for j in range(self.first_q_dot):
 			# 		G[i*(self.nX+self.nU+self.nP)+j] = 0.0
-			Gs.append(effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
-			#G[0] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2
-			#G[(self.N-1)*(self.nX+self.nU+self.nP)] = -effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2
-			d = x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C
+
+			if x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C > 0:
+				Gs.append(effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+			else:
+				Gs.append(-effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+			d = math.fabs(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)
 			for i in range(self.N-1):
 				for j in range(self.NofJoints):
 					# G[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j] = 2.0*x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
@@ -288,7 +293,11 @@ class transportationCost(NonLinearObj):
 					Gs.append(2.0/d*(x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]**2)*\
 						x[i*(self.nX+self.nU+self.nP)+self.first_u+j])
 					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j+self.NofJoints)
-			Gs.append(-effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+			if x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C > 0:
+				Gs.append(-effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+			else:
+				Gs.append(effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+
 			nonzeros.append((self.N-1)*(self.nX+self.nU+self.nP))
 			for i in [self.N-1]:
 				for j in range(self.NofJoints):
@@ -399,7 +408,7 @@ slv = OptSolver(problem, cfg)
 #setting 17,19
 traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
 u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
-guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
+guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)#,obj = [0,16.0])
 
 
 ###debug code
