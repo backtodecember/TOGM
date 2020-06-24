@@ -1,0 +1,42 @@
+Built May 20 2020 for Linux (x86_64 64-bit), gcc 4.4
+Knitro 12.2.0 (Barrier Algorithm)
+
+Timing information
+---------------------------------------
+Total solution time (real) ............   6602.80762  (CPU time = 114644.664)
+Total evaluation time .................   6463.70605           (97.9% real time)
+  Function/constraint eval time/count .   5790.23633 /     87  (87.7% )
+  Gradient/Jacobian eval time/count ...    673.46954 /     11  (10.2% )
+  Hessian evaluation time/count .......      0.00000 /      0  ( 0.0% )
+  Hessian-vector eval time/count ......      0.00000 /      0  ( 0.0% )
+Internal evaluation time ..............      0.00083
+Total BLAS calls time/count ...........      0.56027 /902177  ( 0.0% )
+Total LINPACK calls time/count ........      0.00010 /     33  ( 0.0% )
+Total license check time ..............      0.00000           ( 0.0% )
+Presolve time .........................      0.00000 /         ( 0.0% )
+Load time .............................      0.00507
+Setup time ............................      0.02415
+Time solving Normal subproblem ........      0.48627
+Time solving Tangential subproblem ....      0.60097
+Time computing LS multipliers .........      0.06047
+Av Product time/count .................      0.27952 /    150
+ATv Product time/count ................      0.17508 /    149
+Hv Product time/count .................      0.14071 /    113
+AUG Analyze time/count ................      0.07345 /      2
+AUG Factorization time/count ..........      0.44193 /     12
+AUG Backsolve time/count ..............      0.58734 /    112
+KKT Analyze time/count ................      0.07063 /      2
+KKT Factorization time/count ..........      0.37748 /     11
+KKT Backsolve time/count ..............      0.24938 /     91
+
+Counters
+---------------------------------------
+# Major Iterations (barrier) ...........        10
+# Minor Iterations (barrier) ...........        21
+# Major Fixed Iterations (barrier) .....         0
+# Minor Fixed Iterations (barrier) .....         0
+% Major Fixed Iterations (barrier) .....  0.00
+% Minor Fixed Iterations (barrier) .....  0.00
+# Restoration Iterations (barrier) .....         3
+% Restoration Iterations (barrier) .....  0.30
+---------------------------------------

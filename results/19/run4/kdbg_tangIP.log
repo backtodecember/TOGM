@@ -1,0 +1,68 @@
+Knitro 12.2.0 (Barrier Algorithm)
+Tangential subproblem information
+
+                 Barrier      Barrier
+  Iter    Res   Objective    PrimFeas    CGits type
+--------  --- ------------- --------- -------- ----
+       0  ---  -8.22384e+02  9.52e-02
+          Rej  -2.56050e+04  9.52e-02        0 UNKN
+          Rej  -2.56050e+04  9.52e-02        1 TRGN
+          Rej  -2.56050e+04  9.52e-02        1 TRGN
+          Rej  -2.56050e+04  9.52e-02        1 TRGN
+          Rej  -2.56050e+04  9.52e-02        1 TRGN
+          Rej  -2.56050e+04  9.52e-02        1 TRGN
+          Rej  -2.56050e+04  9.52e-02        1 TRGN
+       1  Acc  -2.54182e+04  1.02e-01        1 TRGN
+       2  Acc   5.48314e+02  5.56e-01        0 UNKN
+          Rej   1.41969e+03  5.56e-01        0 UNKN
+          Rej   1.41969e+03  5.56e-01       14 EXCT
+          Rej   1.41969e+03  5.56e-01        2 TRGN
+          Rej   1.41969e+03  5.56e-01        1 TRGN
+          Rej   1.41969e+03  5.56e-01        1 TRGN
+          Rej   1.41969e+03  5.56e-01        1 TRGN
+          Rej   1.41969e+03  5.56e-01        1 TRGN
+       3  Acc   1.32790e+03  6.44e-01        1 TRGN
+          Rej   5.40096e+02  6.44e-01        0 UNKN
+          Rej   5.40096e+02  6.44e-01        1 TRGN
+                 Barrier      Barrier
+  Iter    Res   Objective    PrimFeas    CGits type
+--------  --- ------------- --------- -------- ----
+          Rej   5.40096e+02  6.44e-01        1 TRGN
+          Rej   5.40096e+02  6.44e-01        1 TRGN
+          Rej   5.40096e+02  6.44e-01        1 TRGN
+          Rej   5.40096e+02  6.44e-01        1 TRGN
+          Rej   5.40096e+02  6.44e-01        1 TRGN
+       4  Acc   5.53545e+02  6.27e-01        1 TRGN
+          Rej   4.22256e+02  6.27e-01        0 UNKN
+       5  Acc   3.95062e+02  8.79e-01        1 TRGN
+          Rej   1.69496e+02  8.79e-01        0 UNKN
+       6  Acc   2.01766e+02  1.34e+00        1 TRGN
+          Rej   1.06004e+02  1.34e+00        0 UNKN
+          Rej   1.06004e+02  1.34e+00        3 TRGN
+       7  Acc   9.68985e+01  1.52e+00        2 TRGN
+          Rej   7.12435e+01  1.52e+00        0 UNKN
+          Rej   7.12435e+01  1.52e+00        2 TRGN
+          Rej   2.77110e+03  2.37e-02        0 UNKN
+          Rej   2.77110e+03  2.37e-02        1 TRGN
+          Rej   2.77110e+03  2.37e-02        1 TRGN
+       8  Acc   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        0 UNKN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+          Rej   2.77437e+03  2.50e-02        1 TRGN
+       9  Acc   2.77443e+03  2.50e-02        1 TRGN
+          Rej   2.77443e+03  2.50e-02        0 UNKN
+          Rej   2.77443e+03  2.50e-02        1 TRGN
+          Rej   2.77443e+03  2.50e-02        1 TRGN
+                 Barrier      Barrier
+  Iter    Res   Objective    PrimFeas    CGits type
+--------  --- ------------- --------- -------- ----
+          Rej   2.77443e+03  2.50e-02        1 TRGN
+      10  Acc   2.77443e+03  2.50e-02        1 TRGN
