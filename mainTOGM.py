@@ -488,7 +488,7 @@ for history in rst.history:
 	# np.save('temp_files/solverlib_obj.npy',np.array(parsed_result['obj']))
 	# np.save('temp_files/solverlib_con.npy',parsed_result['path'][0])
 	
-# 	i += 1
+	i += 1
 
 
 print('Took', time.time() - startTime)
