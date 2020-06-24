@@ -264,17 +264,22 @@ class transportationCost(NonLinearObj):
 				effort_sum = effort_sum + (x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
 					x[i*(self.nX+self.nU+self.nP)+self.first_u+j])**2
 				# print(effort_sum)
-		F[:] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)/self.scale
+		if math.fabs(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C) < 1e-10:
+			F[:] = 0
+		else:
+			F[:] = effort_sum/math.fabs(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)/self.scale
 		if needg:
 			Gs = []
 			nonzeros = [0]
 			# for i in range(self.N):
 			# 	for j in range(self.first_q_dot):
 			# 		G[i*(self.nX+self.nU+self.nP)+j] = 0.0
-			Gs.append(effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
-			#G[0] = effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2
-			#G[(self.N-1)*(self.nX+self.nU+self.nP)] = -effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0])**2
-			d = x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C
+
+			if x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C > 0:
+				Gs.append(effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+			else:
+				Gs.append(-effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+			d = math.fabs(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)
 			for i in range(self.N-1):
 				for j in range(self.NofJoints):
 					# G[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j] = 2.0*x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]*\
@@ -288,7 +293,11 @@ class transportationCost(NonLinearObj):
 					Gs.append(2.0/d*(x[i*(self.nX+self.nU+self.nP)+self.first_q_dot+j]**2)*\
 						x[i*(self.nX+self.nU+self.nP)+self.first_u+j])
 					nonzeros.append(i*(self.nX+self.nU+self.nP)+self.first_q_dot+j+self.NofJoints)
-			Gs.append(-effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+			if x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C > 0:
+				Gs.append(-effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+			else:
+				Gs.append(effort_sum/(x[(self.N-1)*(self.nX+self.nU+self.nP)]-x[0]+self.small_C)**2)
+
 			nonzeros.append((self.N-1)*(self.nX+self.nU+self.nP))
 			for i in [self.N-1]:
 				for j in range(self.NofJoints):
@@ -354,7 +363,7 @@ startTime = time.time()
 #setting before 19
 # problem.preProcess()
 #setting 19
-problem.pre_process()
+problem.pre_process()#dyn_tol = 0.005)#,snopt_mode = False)
 print('preProcess took:',time.time() - startTime)
 
 ##Optimizer parameter setting
@@ -370,9 +379,10 @@ slv = OptSolver(problem, cfg)
 slv.solver.setWorkspace(12000000,12000000)
 
 ##setting for using knitros, test 16,17
-##1014 maxIter,1023 is featol  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
+##1014 maxIter,1023 is featol_abs  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
 ##1015 is the output level 1003 is the algorithm 
-# options = {'1014':60,'1023':1e-4,'1027':1e-4,'1016':2,'1033':0,'history':True}
+##1022 is the feastol_relative 1027 is opttol
+# options = {'1014':60,'1023':1e-4,'1016':2,'1033':0,'1003':1,'1022':1e-4,'1027':1e-4,'history':True}
 # cfg = OptConfig(backend = 'knitro', **options)
 # slv = OptSolver(problem, cfg)
 
@@ -396,13 +406,15 @@ slv.solver.setWorkspace(12000000,12000000)
 # guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 #setting 17,19
-traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
-u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
-guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
+# traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
+# u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
+traj_guess = np.load('results/19/run3/solution_x50.npy')
+u_guess = np.load('results/19/run3/solution_u50.npy')
+guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)#,obj = [0,16.0])
 
 
 ###debug code
-debug_flag = True
+debug_flag = False
 if debug_flag:
 
 	# iteration = 20
@@ -421,9 +433,9 @@ if debug_flag:
 	#print(type(dyn_constr),type(ankle_constr),type(np.array([0.0])))
 	np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
 
-	xbound = parsed_result['Xbd']
-	ubound = parsed_result['Ubd']
-	print(np.max(xbound),np.min(xbound),np.max(ubound),np.min(ubound))
+	# xbound = parsed_result['Xbd']
+	# ubound = parsed_result['Ubd']
+	# print(np.max(xbound),np.min(xbound),np.max(ubound),np.min(ubound))
 
 	#print('dyn:',parsed_result['dyn'])
 	# print('path:',parsed_result['path'])
@@ -439,13 +451,13 @@ if debug_flag:
 startTime = time.time()
 
 ## setting for using SNOPT
-iteration = 5
+iteration = 55
 rst = slv.solve_guess(guess)
 sol = problem.parse_sol(rst.sol.copy())
 np.save('temp_files/solution_u'+str(iteration),sol['u'])
 np.save('temp_files/solution_x'+str(iteration),sol['x'])
 print(str(iteration)+ 'iterations completed')
-for i in range(9):
+for i in range(19):
 	iteration += 5
 	rst = slv.solver.solve_more(5)
 	sol = problem.parse_sol(rst.sol.copy())
