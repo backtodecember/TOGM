@@ -384,7 +384,7 @@ print('preProcess took:',time.time() - startTime)
 ##1022 is the feastol_relative 1027 is opttol
 ##1006 is KN_PARAM_BAR_FEASIBLE
 ##1097 KN_PARAM_INITPENALTY
-options = {'1014':1,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':3,'1097':100.0,'history':True}
+options = {'1014':1,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':0,'1097':100.0,'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
 
