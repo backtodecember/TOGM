@@ -430,12 +430,12 @@ if debug_flag:
 		print(key,value,np.shape(value))
 
 	#np.save('temp_files/solverlib_obj0.npy',np.array(parsed_result['obj']))
-	np.save('temp_files2/knitro_obj0.npy',np.array([0.0]))
+	np.save('temp_files/knitro_obj0.npy',np.array([0.0]))
 	dyn_constr = np.array(parsed_result['dyn']).flatten()
 	ankle_constr = parsed_result['path'][0].flatten()
 	#print(np.shape(dyn_constr),np.shape(ankle_constr),np.shape(np.array([0.0])))
 	#print(type(dyn_constr),type(ankle_constr),type(np.array([0.0])))
-	np.save('temp_files2/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
+	np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
 
 	# xbound = parsed_result['Xbd']
 	# ubound = parsed_result['Ubd']
@@ -475,12 +475,12 @@ rst = slv.solve_guess(guess)
 i = 0
 for history in rst.history:
 	sol = problem.parse_sol(history['x'])
-	np.save('temp_files2/solution_u'+str(i+1)+'.npy',sol['u'])
-	np.save('temp_files2/solution_x'+str(i+1)+'.npy',sol['x'])
+	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
+	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
 
 	### This saves everything from the optimizer
-	np.save('temp_files2/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
-	np.save('temp_files2/knitro_con'+str(i+1)+'.npy',history['con'])
+	np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
+	np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
 
 	### 
 	# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
