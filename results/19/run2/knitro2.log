@@ -1,0 +1,74 @@
+
+=======================================
+          Commercial License
+         Artelys Knitro 12.2.0
+=======================================
+
+Knitro presolve eliminated 0 variables and 0 constraints.
+
+bar_feasible:            3
+cg_maxit:               50
+feastol:                 0.0001
+feastol_abs:             0.0001
+maxit:                   60
+opttol:                  0.0001
+outlev:                  3
+outmode:                 2
+par_concurrent_evals:    0
+Knitro changing algorithm from AUTO to 1.
+Knitro changing bar_initpt from AUTO to 3.
+Knitro changing bar_murule from AUTO to 4.
+Knitro changing bar_penaltycons from AUTO to 2.
+Knitro changing bar_penaltyrule from AUTO to 2.
+Knitro changing bar_switchrule from AUTO to 0.
+Knitro changing linesearch from AUTO to 1.
+Knitro changing linsolver from AUTO to 5.
+
+Problem Characteristics                                 (   Presolved)
+-----------------------
+Objective goal:  Minimize
+Objective type:  general
+Number of variables:                               7602 (        7602)
+    bounded below only:                               0 (           0)
+    bounded above only:                               0 (           0)
+    bounded below and above:                       7602 (        7602)
+    fixed:                                            0 (           0)
+    free:                                             0 (           0)
+Number of constraints:                             6848 (       13696)
+    linear equalities:                                0 (           0)
+    quadratic equalities:                             0 (           0)
+    gen. nonlinear equalities:                        0 (           0)
+    linear one-sided inequalities:                    0 (           0)
+    quadratic one-sided inequalities:                 0 (           0)
+    gen. nonlinear one-sided inequalities:            0 (       13696)
+    linear two-sided inequalities:                    0 (           0)
+    quadratic two-sided inequalities:                 0 (           0)
+    gen. nonlinear two-sided inequalities:         6848 (           0)
+Number of nonzeros in Jacobian:                  239440 (      478880)
+Number of nonzeros in Hessian:                        0 (           0)
+
+  Iter      Objective      FeasError   OptError    ||Step||    CGits 
+--------  --------------  ----------  ----------  ----------  -------
+       0    1.590044e+01   0.000e+00
+Starting feasible mode...
+       1    1.590044e+01   0.000e+00   1.319e+01   8.474e-10       13
+       2    1.590044e+01   0.000e+00   1.315e+01   2.974e-09        2
+       3    1.590044e+01   0.000e+00   1.315e+01   5.927e-09        1
+       4    1.590044e+01   0.000e+00   1.310e+01   4.177e-08        1
+
+EXIT: Termination by user.
+
+Final Statistics
+----------------
+Final objective value               =   1.59004380759793e+01
+Final feasibility error (abs / rel) =   0.00e+00 / 0.00e+00
+Final optimality error  (abs / rel) =   1.31e+01 / 3.28e-01
+# of iterations                     =          4 
+# of CG iterations                  =         21 
+# of function evaluations           =         58
+# of gradient evaluations           =          5
+Total program time (secs)           =    4312.09082 ( 73693.250 CPU time)
+Time spent in evaluations (secs)    =    4172.30518
+
+===============================================================================
+

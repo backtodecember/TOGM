@@ -50,9 +50,6 @@ class analyzer2:
 			ankle_positions = self.robot.robot.get_ankle_positions(full = True)
 			force,a = self.robot.simulateOnce(self.u[i],continuous_simulation = False, SA = False, fixed = False)
 			a = a.ravel()
-			self.force_list.append(force)
-			self.ankle_position_list.append(ankle_positions)
-		
 			if self.method == 'Euler':
 				if i < self.N - 1:
 					p_error = self.x[i+1,0:15]-self.x[i,0:15]-self.dt*self.x[i,15:30]
@@ -101,14 +98,14 @@ class analyzer2:
 		iterations = []
 
 		for i in range(total_iters):
-			# if i == 0:
-			# 	#add the initial guess's values
-			# 	objective_values.append(self.objective(initial_x,initial_u))
-			# 	iterations.append(0)
-			# else:
-			objective_values.append(np.load(prefix+str(i)+'.npy'))
-			iterations.append(i)
-
+			if i == 0:
+				#add the initial guess's values
+				objective_values.append(16.003)
+				iterations.append(0)
+			else:
+				objective_values.append(np.load(prefix+str(i)+'.npy'))
+				iterations.append(i)
+		print(objective_values)
 		##plotting
 		plt.plot(iterations,objective_values)
 		plt.title('Objective Values over Iterations')
@@ -131,8 +128,8 @@ class analyzer2:
 			else:
 				constr_values = np.load(prefix+str(i)+'.npy')
 				#remove the first and last
-				constr_values = constr_values[1:6879]
-			print(np.shape(constr_values))
+				constr_values = constr_values[0:5400+181*8]
+
 			#parse the constraint values
 			violation = []
 			N_of_dyn = 5400
@@ -159,11 +156,10 @@ class analyzer2:
 			# 	violation.append(0.4 - constr_values[N_of_dyn+181*8])
 
 
-			print(constr_values[6848])
+			#print(constr_values[6848])
 			dyn_constr_violations.append(np.linalg.norm(violation))
 			dyn_constr_violations_l1.append(np.max(np.absolute(violation)))
 
-			print(dyn_constr_violations,dyn_constr_violations_l1)
 		##plotting
 		plt.plot(iterations,dyn_constr_violations,iterations,dyn_constr_violations_l1)
 		plt.legend(['2-norm','Max Violation'])
@@ -407,9 +403,9 @@ class PIDTracker:
 if __name__=="__main__":
 	x = np.load('results/17/run4/solution_x1.npy')
 	u = np.load('results/17/run4/solution_u1.npy')
-	analyzer = analyzer2(x,u,case = '17',run = '3',dt = 0.05,method = "BackEuler")
-	analyzer.perIterationConstrVio(1,'temp_files/knitro_con')
-	#analyzer.perIterationObj(11,'results/16/run4/knitro_obj')
+	analyzer = analyzer2(x,u,case = '19',run = '2',dt = 0.05,method = "Euler")
+	analyzer.perIterationConstrVio(11,'results/19/run2/knitro_con')
+	analyzer.perIterationObj(11,'results/19/run2/knitro_obj')
 
 
 

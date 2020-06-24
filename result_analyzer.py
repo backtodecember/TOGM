@@ -516,14 +516,16 @@ if __name__=="__main__":
 	# print(traj_guess[-1,0])
 
 	##### code to evaluate an optimized trajectory
-	iteration = 10
-	traj = np.load('results/16/run4/solution_x'+str(iteration) +'.npy')
-	u = np.load('results/16/run4/solution_u'+str(iteration)+'.npy')
+	iteration = 11
+	traj = np.load('results/19/run2/solution_x'+str(iteration) +'.npy')
+	u = np.load('results/19/run2/solution_u'+str(iteration)+'.npy')
 
+	# traj = np.load('temp_files/solution_x10.npy')
+	# u = np.load('temp_files/solution_u10.npy')
 	# traj = np.load('results/17/solution_x'+str(iteration) +'.npy')
 	# u = np.load('results/17/solution_u'+str(iteration)+'.npy')
 
-	analyzer = analyzer('16',dt = 0.05,method = "BackEuler",x_data = traj, u_data = u)
+	analyzer = analyzer('19',dt = 0.05,method = "Euler",x_data = traj, u_data = u)
 	analyzer.calculation()
 	analyzer.animate() #animate the trajectory
 	# print('objective is',analyzer.objective(traj,u_))
