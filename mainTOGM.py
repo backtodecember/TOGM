@@ -385,7 +385,8 @@ print('preProcess took:',time.time() - startTime)
 ##1006 is KN_PARAM_BAR_FEASIBLE
 ##1097 KN_PARAM_INITPENALTY
 ##1049 adopt flexible penalty parameter in the merit function to weight feasibility vs optimality
-options = {'1014':10,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':0,'1097':500.0,'1049':1,'history':True}
+##debug information 1032
+options = {'1014':10,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':0,'1097':500.0,'1049':1,'1031':1,'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
 
