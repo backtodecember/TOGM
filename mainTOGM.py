@@ -382,7 +382,8 @@ print('preProcess took:',time.time() - startTime)
 ##1014 maxIter,1023 is featol_abs  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
 ##1015 is the output level 1003 is the algorithm 
 ##1022 is the feastol_relative 1027 is opttol
-options = {'1014':60,'1023':1e-4,'1016':2,'1033':0,'1003':1,'1022':1e-4,'1027':1e-4,'history':True}
+##1006 is KN_PARAM_BAR_FEASIBLE
+options = {'1014':60,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':3,'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
 
@@ -406,13 +407,15 @@ slv = OptSolver(problem, cfg)
 # guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 #setting 17,19
-traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
-u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
+# traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
+# u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
+traj_guess = np.load('results/19/run2/solution_x11.npy')
+u_guess = np.load('results/19/run2/solution_u11.npy')
 guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)#,obj = [0,16.0])
 
 
 ###debug code
-debug_flag = True
+debug_flag = False
 if debug_flag:
 
 	# iteration = 20
@@ -424,12 +427,12 @@ if debug_flag:
 		print(key,value,np.shape(value))
 
 	#np.save('temp_files/solverlib_obj0.npy',np.array(parsed_result['obj']))
-	np.save('temp_files/knitro_obj0.npy',np.array([0.0]))
+	np.save('temp_files2/knitro_obj0.npy',np.array([0.0]))
 	dyn_constr = np.array(parsed_result['dyn']).flatten()
 	ankle_constr = parsed_result['path'][0].flatten()
 	#print(np.shape(dyn_constr),np.shape(ankle_constr),np.shape(np.array([0.0])))
 	#print(type(dyn_constr),type(ankle_constr),type(np.array([0.0])))
-	np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
+	np.save('temp_files2/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
 
 	xbound = parsed_result['Xbd']
 	ubound = parsed_result['Ubd']
@@ -466,15 +469,15 @@ startTime = time.time()
 
 ##setting for using Knitro
 rst = slv.solve_guess(guess)
-i = 0
+i = 11
 for history in rst.history:
 	sol = problem.parse_sol(history['x'])
-	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
-	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
+	np.save('temp_files2/solution_u'+str(i+1)+'.npy',sol['u'])
+	np.save('temp_files2/solution_x'+str(i+1)+'.npy',sol['x'])
 
 	### This saves everything from the optimizer
-	np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
-	np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
+	np.save('temp_files2/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
+	np.save('temp_files2/knitro_con'+str(i+1)+'.npy',history['con'])
 
 	### 
 	# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
