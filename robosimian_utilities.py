@@ -189,7 +189,8 @@ class granularMedia:
 						#SA
 						w = np.array(weights[iteration2])[np.newaxis].T
 						Q4 = Q4 + np.dot(w,np.array(grad)[np.newaxis])
-
+					
+					#TODO: is this a bug here for SA?.. it seems that I did not modify the gradient for the ankle
 
 					#p[2] = -p[2]  #the torque defined when robosimian is collecting data is y, into the page.. no longer needs to flip here
 					unit_direction =  [-math.sin(theta_new[1]),0,-math.cos(theta_new[1])]

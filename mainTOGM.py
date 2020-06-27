@@ -417,44 +417,23 @@ u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
 guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)#,obj = [0,16.0])
 
 
-###debug code
-debug_flag = False
-if debug_flag:
-
-	# iteration = 20
-	# traj = np.load('results/17/run2/solution_x'+str(iteration) +'.npy')
-	# u = np.load('results/17/run2/solution_u'+str(iteration)+'.npy')
-	# guess = problem.genGuessFromTraj(X= traj, U= u, t0 = 0, tf = tf)
+###same initial guess
+init_flag = False
+if init_flag:
 	parsed_result = problem.parse_f(guess)
 	for key, value in parsed_result.items() :
 		print(key,value,np.shape(value))
 
-	#np.save('temp_files/solverlib_obj0.npy',np.array(parsed_result['obj']))
 	np.save('temp_files/knitro_obj0.npy',np.array([0.0]))
 	dyn_constr = np.array(parsed_result['dyn']).flatten()
 	ankle_constr = parsed_result['path'][0].flatten()
-	#print(np.shape(dyn_constr),np.shape(ankle_constr),np.shape(np.array([0.0])))
-	#print(type(dyn_constr),type(ankle_constr),type(np.array([0.0])))
 	np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
 
-	# xbound = parsed_result['Xbd']
-	# ubound = parsed_result['Ubd']
-	# print(np.max(xbound),np.min(xbound),np.max(ubound),np.min(ubound))
-
-	#print('dyn:',parsed_result['dyn'])
-	# print('path:',parsed_result['path'])
-	# print('obj:',parsed_result['obj'])
-	# print(np.shape(parsed_result['dyn']))
-	# dyn = np.array(parsed_result['dyn'])
-	# print(np.max(dyn))
-	# print('path:',parsed_result['path'])
-	# print(np.shape(parsed_result['path'][0]))
-	#exit()
 
 
 startTime = time.time()
 
-## setting for using SNOPT
+### setting for using SNOPT
 # iteration = 55
 # rst = slv.solve_guess(guess)
 # sol = problem.parse_sol(rst.sol.copy())
