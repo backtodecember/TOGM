@@ -16,15 +16,16 @@ import ctypes as ct
 import configs
 import pdb
 import mosek
-ultiprocessing as mp
+import multiprocessing as mp
 
-
+#Zherong's package
+from KlamptDiffNE import *
+import pickle,copy
 
 
 class robosimianSimulator:
 	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01,dyn = 'own',print_level = 0, \
 		augmented = True, RL = False, extrapolation = False, integrate_dt = 0.01):
-
 		self.dyn = dyn
 		self.q = q
 		self.q_dot = q_dot
@@ -59,78 +60,128 @@ class robosimianSimulator:
 			for i in range(4):
 				self.M_2[0+i*3:3+i*3,0+i*3:3+i*3] = self.ankle_inertia ##same as the ankle mass....
 
-			if self.solver == 'cvxpy':
-				self.C = cp.Parameter((15,1)) #joint constraints
-				self.D = cp.Parameter((15,12)) #contact jacobian
-				self.M = cp.Parameter((15,15),PSD=True)
-				self.Jp = cp.Parameter((12,15))
-				#for each contact there are 26 lambdas
-				self.x = cp.Variable((4*3+4*26,1)) #contact wrench and lambdas
-				self.A = cp.Parameter((3*4,26*4))
-				self.A2 = cp.Parameter((4,26*4))
-				self.b2 = cp.Parameter((4,1))
-				#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
-				#	cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
-				self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
+			self.C = cp.Parameter((15,1)) #joint constraints
+			self.D = cp.Parameter((15,12)) #contact jacobian
+			self.M = cp.Parameter((15,15),PSD=True)
+			self.Jp = cp.Parameter((12,15))
+			#for each contact there are 26 lambdas
+			self.x = cp.Variable((4*3+4*26,1)) #contact wrench and lambdas
+			self.A = cp.Parameter((3*4,26*4))
+			self.A2 = cp.Parameter((4,26*4))
+			self.b2 = cp.Parameter((4,1))
+			#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
+			#	cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
+			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
 
-				self.constraints = [self.x[0:12] - self.A@self.x[12:12+26*4]== np.zeros((12,1)),\
-					self.A2@self.x[12:12+26*4] <= self.b2,\
-					-self.x[12:12+26*4] <= np.zeros((26*4,1))]
-				self.prob = cp.Problem(self.obj, self.constraints)
-				A2 = np.zeros((4,self.Dlambda))
-				for i in range(4):
-					A2[i,i*26:(i+1)*26] = np.ones((1,26)) 	
-				self.A2.value = A2		
-				#self.expr = cp.transforms.indicator(self.constraints)
+			self.constraints = [self.x[0:12] - self.A@self.x[12:12+26*4]== np.zeros((12,1)),\
+				self.A2@self.x[12:12+26*4] <= self.b2,\
+				-self.x[12:12+26*4] <= np.zeros((26*4,1))]
+			self.prob = cp.Problem(self.obj, self.constraints)
+			A2 = np.zeros((4,self.Dlambda))
+			for i in range(4):
+				A2[i,i*26:(i+1)*26] = np.ones((1,26)) 	
+			self.A2.value = A2		
+			#self.expr = cp.transforms.indicator(self.constraints)
 
-				#things for jacobian
-				self.dEyy = np.zeros((self.Dwc+self.Dlambda,self.Dwc+self.Dlambda))
-				self.dEyx = np.zeros((self.Dx+self.Du,self.Dwc+self.Dlambda))
-				#dhdy
-				self.dhy = np.zeros((self.Dwc+4+self.Dlambda,self.Dwc+self.Dlambda))
-				self.dhy[0:self.Dwc,0:self.Dwc] = np.eye(self.Dwc)
-				self.dhy[self.Dwc+4:self.Dwc+4+self.Dlambda,self.Dwc:self.Dwc+self.Dlambda] = -np.eye(self.Dlambda)
-				for i in range(4):
-					self.dhy[12+i,self.Dwc+i*26:self.Dwc+(i+1)*26] = np.ones((1,26))
-				#ddh/dydy
-				self.dhyy = np.zeros((self.Dwc+self.Dlambda,self.Dwc+self.Dlambda))
-				#mu ddh/dydx
-				self.mudhyx = np.zeros((self.Dx+self.Du,self.Dwc+self.Dlambda))
-				self.dhx = np.zeros((120,self.Dx+self.Du))
+			#things for jacobian
+			self.dEyy = np.zeros((self.Dwc+self.Dlambda,self.Dwc+self.Dlambda))
+			self.dEyx = np.zeros((self.Dx+self.Du,self.Dwc+self.Dlambda))
+			#dhdy
+			self.dhy = np.zeros((self.Dwc+4+self.Dlambda,self.Dwc+self.Dlambda))
+			self.dhy[0:self.Dwc,0:self.Dwc] = np.eye(self.Dwc)
+			self.dhy[self.Dwc+4:self.Dwc+4+self.Dlambda,self.Dwc:self.Dwc+self.Dlambda] = -np.eye(self.Dlambda)
+			for i in range(4):
+				self.dhy[12+i,self.Dwc+i*26:self.Dwc+(i+1)*26] = np.ones((1,26))
+			#ddh/dydy
+			self.dhyy = np.zeros((self.Dwc+self.Dlambda,self.Dwc+self.Dlambda))
+			#mu ddh/dydx
+			self.mudhyx = np.zeros((self.Dx+self.Du,self.Dwc+self.Dlambda))
+			self.dhx = np.zeros((120,self.Dx+self.Du))
 
 		elif self.dyn == 'DiffNE':
-			#TODO
-			#self.robot =  DiffNERobotModel(world,"Robosimian/robosimian_caesar_new_all_active.urdf",use2DBase=True)
-			pass
+			world = klampt.WorldModel()
+			#TODO, change collision mesh size
+			self.robot =  DiffNERobotModel(world,"data/robosimian_caesar_new_all_active.urdf",use2DBase=True)
+			#specify fixed joints
+			unusedJoints=["limb1_link3","limb1_link5","limb1_link7",
+			"limb2_link3","limb2_link5","limb2_link7",
+			"limb3_link3","limb3_link5","limb3_link7",
+			"limb4_link3","limb4_link5","limb4_link7"]
+			self.robot.eliminate_joints(unusedJoints)
+
+			##debugging:
+			print(self.robot.num_DOF)
+			print(self.robot.qdq,np.shape(self.robot.qdq))
+
+			# #Q:
+			# #add torso position and angle??
+			# #can you do this?
+			# #TODO:can you add to self.robot.qdq directly?
+			# #set initial joint positions
+			# self.robot.set_joint_angle("limb1_link2", self.q[3,0])
+			# self.robot.set_joint_angle("limb1_link4", self.q[4,0])
+			# self.robot.set_joint_angle("limb1_link6", self.q[5,0])
+			# self.robot.set_joint_angle("limb2_link2", self.q[6,0])
+			# self.robot.set_joint_angle("limb2_link4", self.q[7,0])
+			# self.robot.set_joint_angle("limb2_link6", self.q[8,0])
+			# self.robot.set_joint_angle("limb3_link2", self.q[9,0])
+			# self.robot.set_joint_angle("limb3_link4", self.q[10,0])
+			# self.robot.set_joint_angle("limb3_link6", self.q[11,0])
+			# self.robot.set_joint_angle("limb4_link2", self.q[12,0])
+			# self.robot.set_joint_angle("limb4_link4", self.q[13,0])
+			# self.robot.set_joint_angle("limb4_link6", self.q[14,0])
+
+			# #only not granular needs ees to set the floor (referring to https
+			# #://bitbucket.org/runningblade/diffne/src/master/Main/mainDebugMDPSimulatorRobosimianKlampt.py)
+
+			# self.robot.create_simulator(accuracy=64,granular=True)     #this will use double
+			# #m.create_simulator(accuracy=128)    #this will use quadmath
+			# #m.create_simulator(accuracy=512)    #this will use MPFR
+			# #m.set_PD_controller(1000,1)
+
+			# #Q: set floor?
+			# self.robot.set_floor([0,0,10,20],ees)
+			# self.robot.qdq[2]=math.pi/4
+			# #TODO:need to check dimension of qdq
+
+			# #run this for debugging
+			# #visualizer
+			# vis=GLVisualizer(world,None,m.robot,m)
+			# vis.qdq0=copy.deepcopy(m.qdq)
+			# vis.run()
+
+
 
 		else:
-			raise Exception(Wrong Dyn given')
+			raise Exception('Wrong Dyn given')
 
 		self.RL = RL
 		if self.RL:
 			self.ankle_poses = np.zeros((8,1))
 
 	def getDynJac(self,x,u,continuous = False):
+		"""
+		Parameters:
+		--------------
+		x,u are 1d vectors
+		"""
+		q = x[0:15]
+		q_dot = x[15:30]
+		self.q = q[np.newaxis].T
+		self.q_dot = q_dot[np.newaxis].T
 
-		if not continuous:
-			q = x[0:15]
-			q_dot = x[15:30]
-			self.q = q[np.newaxis].T
-			self.q_dot = q_dot[np.newaxis].T
+		if self.dyn == 'own':
 			self.robot.set_q_2D_(q)
 			self.robot.set_q_dot_2D_(q_dot)
 			force,a,DynJac = self.simulateOnce(u,continuous_simulation = continuous,SA = True)
-			return a,DynJac
-		else:
-			q = x[0:15]
-			q_dot = x[15:30]
-			self.q = q[np.newaxis].T
-			self.q_dot = q_dot[np.newaxis].T
-			self.robot.set_q_2D_(q)
-			self.robot.set_q_dot_2D_(q_dot)
-			force,a,DynJac = self.simulateOnce(u,continuous_simulation = continuous,SA = True)
+			if not continuous:		
+				return a,DynJac
+			else:
+				return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
-			return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
+		#TODO:
+		elif self.dyn == 'DiffNE':
+			self.robot.()
 
 	def getDyn(self,x,u,continuous = False):
 		"""
@@ -199,7 +250,6 @@ class robosimianSimulator:
 		"""
 		u: 1D np array
 		"""	
-
 		#debug:
 		loop_start_time = time.time()
 		##add viscious friction
@@ -283,23 +333,13 @@ class robosimianSimulator:
 				self.b2.value = b2
 
 				# start_time = time.time()
-
-
 				#smosek_param = {'MSK_DPAR_BASIS_TOL_X':1e-9,'MSK_DPAR_INTPNT_CO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_QO_TOL_MU_RED':1e-15,'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':1e-12}
-				#self.prob.solve(solver=cp.MOSEK,mosek_params = mosek_param,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
-				
+				#self.prob.solve(solver=cp.MOSEK,mosek_params = mosek_param,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)				
 				self.prob.solve(solver=cp.MOSEK,verbose = False,warm_start = False)#,eps_abs = 1e-11,eps_rel = 1e-11,max_iter = 100000000)
-				
-
 				#self.prob.solve(solver=cp.ECOS,verbose = False,warm_start = False,abstol = 1e-12,reltol = 1e-12)				
 				#self.prob.solve(solver=cp.OSQP,verbose = False,warm_start = False)#,eps_abs = 1e-12,eps_rel = 1e-12,max_iter = 10000000)
 				#self.prob.solve(verbose = False,warm_start = True)
-				#print(self.constraints[2].dual_value)
-
-
-
 				# print('CVX solving took:',time.time() - start_time)
-
 
 				x_k = self.x.value[0:12]
 				wc = x_k
@@ -440,7 +480,14 @@ class robosimianSimulator:
 			else:
 				pass
 		else:
+			##what do you return when you do RL?
 			return 
+
+
+
+
+
+
 
 	def simulate(self,total_time,plot = False, fixed = True,visualize = False):
 		world = self.robot.get_world()
