@@ -4,7 +4,6 @@
 #only use the V formulation
 from robosimian_utilities import granularMedia
 from robosimian_wrapper import robosimian
-from MPQP import MPQP
 import matplotlib.pyplot as plt
 import numpy as np
 import math
@@ -12,122 +11,105 @@ import time
 import cvxpy as cp
 from klampt.math import vectorops as vo
 from klampt import vis
-
-from copy import deepcopy
-from klampt.math import vectorops as vo
+from copy import deepcopy,copy
 import ctypes as ct
 import configs
 import pdb
 import mosek
-from copy import copy
-
-
-import multiprocessing as mp
-# # We must import this explicitly, it is not imported by the top-level
-# # multiprocessing module.
-# import multiprocessing.pool
-
-# class NoDaemonProcess(multiprocessing.Process):
-#     # make 'daemon' attribute always return False
-#     def _get_daemon(self):
-#         return False
-#     def _set_daemon(self, value):
-#         pass
-#     daemon = property(_get_daemon, _set_daemon)
-
-# # We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
-# # because the latter is only a wrapper function, not a proper class.
-# class MyPool(multiprocessing.pool.Pool):
-#     Process = NoDaemonProcess
+ultiprocessing as mp
 
 
 
 
 class robosimianSimulator:
-	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01, solver = 'cvxpy',print_level = 0, \
+	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01,dyn = 'own',print_level = 0, \
 		augmented = True, RL = False, extrapolation = False, integrate_dt = 0.01):
 
-		self.robot = robosimian(print_level = print_level, RL = RL)
+		self.dyn = dyn
 		self.q = q
 		self.q_dot = q_dot
 		self.print_level = print_level
-		self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
-		self.compute_pool = mp.Pool(4)
 		self.dt = dt
 		self.integrate_dt = integrate_dt
 		self.time = 0
+		if self.dyn == 'own':
+			self.robot = robosimian(print_level = print_level, RL = RL)
+			self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
+			self.compute_pool = mp.Pool(4)
+			#parameters for doing sensitivity analysis
+			self.Dx = 30 
+			self.Du = 12
+			self.Dwc = 12 
+			self.Dlambda = 4*26
+			self.augmented = augmented
+			self.robot.set_q_2D(self.q)
+			self.robot.set_q_dot_2D(self.q_dot)
 
-		self.Dx = 30 
-		self.Du = 12
-		self.Dwc = 12 
-		self.Dlambda = 4*26
-		self.solver = solver
-		self.augmented = augmented
-		self.robot.set_q_2D(self.q)
-		self.robot.set_q_dot_2D(self.q_dot)
+			#set up M1, which is used for scaling inertia w.r.t. granular media inertia during optimization
+			#self.compute_pool = mp.Pool(4)
+			ankle_density = 800
+			ankle_radius = 0.0267
+			ankle_length = 0.15
+			ankle_mass = math.pi*ankle_radius**2*ankle_length*ankle_density
+			ankle_rot_inertia = ankle_mass*ankle_radius**2/2.0
+			self.ankle_inertia = np.array([[ankle_mass,0,0],[0,ankle_mass,0],[0,0,ankle_rot_inertia]])
+			
+			## TODO: there might exist a better way to compute M_2
+			self.M_2 = np.zeros((4*3,4*3))#This is the mass of granular material...
+			for i in range(4):
+				self.M_2[0+i*3:3+i*3,0+i*3:3+i*3] = self.ankle_inertia ##same as the ankle mass....
+
+			if self.solver == 'cvxpy':
+				self.C = cp.Parameter((15,1)) #joint constraints
+				self.D = cp.Parameter((15,12)) #contact jacobian
+				self.M = cp.Parameter((15,15),PSD=True)
+				self.Jp = cp.Parameter((12,15))
+				#for each contact there are 26 lambdas
+				self.x = cp.Variable((4*3+4*26,1)) #contact wrench and lambdas
+				self.A = cp.Parameter((3*4,26*4))
+				self.A2 = cp.Parameter((4,26*4))
+				self.b2 = cp.Parameter((4,1))
+				#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
+				#	cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
+				self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
+
+				self.constraints = [self.x[0:12] - self.A@self.x[12:12+26*4]== np.zeros((12,1)),\
+					self.A2@self.x[12:12+26*4] <= self.b2,\
+					-self.x[12:12+26*4] <= np.zeros((26*4,1))]
+				self.prob = cp.Problem(self.obj, self.constraints)
+				A2 = np.zeros((4,self.Dlambda))
+				for i in range(4):
+					A2[i,i*26:(i+1)*26] = np.ones((1,26)) 	
+				self.A2.value = A2		
+				#self.expr = cp.transforms.indicator(self.constraints)
+
+				#things for jacobian
+				self.dEyy = np.zeros((self.Dwc+self.Dlambda,self.Dwc+self.Dlambda))
+				self.dEyx = np.zeros((self.Dx+self.Du,self.Dwc+self.Dlambda))
+				#dhdy
+				self.dhy = np.zeros((self.Dwc+4+self.Dlambda,self.Dwc+self.Dlambda))
+				self.dhy[0:self.Dwc,0:self.Dwc] = np.eye(self.Dwc)
+				self.dhy[self.Dwc+4:self.Dwc+4+self.Dlambda,self.Dwc:self.Dwc+self.Dlambda] = -np.eye(self.Dlambda)
+				for i in range(4):
+					self.dhy[12+i,self.Dwc+i*26:self.Dwc+(i+1)*26] = np.ones((1,26))
+				#ddh/dydy
+				self.dhyy = np.zeros((self.Dwc+self.Dlambda,self.Dwc+self.Dlambda))
+				#mu ddh/dydx
+				self.mudhyx = np.zeros((self.Dx+self.Du,self.Dwc+self.Dlambda))
+				self.dhx = np.zeros((120,self.Dx+self.Du))
+
+		elif self.dyn == 'DiffNE':
+			#TODO
+			#self.robot =  DiffNERobotModel(world,"Robosimian/robosimian_caesar_new_all_active.urdf",use2DBase=True)
+			pass
+
+		else:
+			raise Exception(Wrong Dyn given')
+
 		self.RL = RL
 		if self.RL:
 			self.ankle_poses = np.zeros((8,1))
-		#set up M1, which is used for scaling inertia w.r.t. granular media inertia during optimization
-		#self.compute_pool = mp.Pool(4)
-		ankle_density = 800
-		ankle_radius = 0.0267
-		ankle_length = 0.15
-		ankle_mass = math.pi*ankle_radius**2*ankle_length*ankle_density
-		ankle_rot_inertia = ankle_mass*ankle_radius**2/2.0
-		self.ankle_inertia = np.array([[ankle_mass,0,0],[0,ankle_mass,0],[0,0,ankle_rot_inertia]])
-		
-		## TODO: there might exist a better way to compute M_2
-		self.M_2 = np.zeros((4*3,4*3))#This is the mass of granular material...
-		for i in range(4):
-			self.M_2[0+i*3:3+i*3,0+i*3:3+i*3] = self.ankle_inertia ##same as the ankle mass....
 
-		if self.solver == 'cvxpy':
-			self.C = cp.Parameter((15,1)) #joint constraints
-			self.D = cp.Parameter((15,12)) #contact jacobian
-			self.M = cp.Parameter((15,15),PSD=True)
-			self.Jp = cp.Parameter((12,15))
-			#for each contact there are 26 lambdas
-			self.x = cp.Variable((4*3+4*26,1)) #contact wrench and lambdas
-			self.A = cp.Parameter((3*4,26*4))
-			self.A2 = cp.Parameter((4,26*4))
-			self.b2 = cp.Parameter((4,1))
-			#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
-			#	cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
-			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
-
-			self.constraints = [self.x[0:12] - self.A@self.x[12:12+26*4]== np.zeros((12,1)),\
-				self.A2@self.x[12:12+26*4] <= self.b2,\
-				-self.x[12:12+26*4] <= np.zeros((26*4,1))]
-			self.prob = cp.Problem(self.obj, self.constraints)
-			A2 = np.zeros((4,self.Dlambda))
-			for i in range(4):
-				A2[i,i*26:(i+1)*26] = np.ones((1,26)) 	
-			self.A2.value = A2		
-			#self.expr = cp.transforms.indicator(self.constraints)
-
-			#things for jacobian
-			self.dEyy = np.zeros((self.Dwc+self.Dlambda,self.Dwc+self.Dlambda))
-			self.dEyx = np.zeros((self.Dx+self.Du,self.Dwc+self.Dlambda))
-			#dhdy
-			self.dhy = np.zeros((self.Dwc+4+self.Dlambda,self.Dwc+self.Dlambda))
-			self.dhy[0:self.Dwc,0:self.Dwc] = np.eye(self.Dwc)
-			self.dhy[self.Dwc+4:self.Dwc+4+self.Dlambda,self.Dwc:self.Dwc+self.Dlambda] = -np.eye(self.Dlambda)
-			for i in range(4):
-				self.dhy[12+i,self.Dwc+i*26:self.Dwc+(i+1)*26] = np.ones((1,26))
-			#ddh/dydy
-			self.dhyy = np.zeros((self.Dwc+self.Dlambda,self.Dwc+self.Dlambda))
-			#mu ddh/dydx
-			self.mudhyx = np.zeros((self.Dx+self.Du,self.Dwc+self.Dlambda))
-			self.dhx = np.zeros((120,self.Dx+self.Du))
-
-		elif self.solver == 'mpqp':
-			self.mpqp=MPQP("software")
-			
-		else:
-			print("Wrong formulation specification")
-			exit()
-	
 	def getDynJac(self,x,u,continuous = False):
 
 		if not continuous:
@@ -220,8 +202,6 @@ class robosimianSimulator:
 
 		#debug:
 		loop_start_time = time.time()
-
-
 		##add viscious friction
 		if self.RL:
 			u_friction = []
@@ -280,26 +260,17 @@ class robosimianSimulator:
 
 		# for contact in contacts:
 		# 	add_A,Q4s = self.terrain.feasibleWrenchSpace(contact,self.robot.ankle_length,True)
-
 		# 	A[contact[3]*3:(contact[3]+1)*3,contact[3]*26:(contact[3]+1)*26] = add_A
 		# 	#SA
 		# 	if SA:
 		# 		self.dhy[contact[3]*3:(contact[3]+1)*3,contact[3]*26+12:(contact[3]+1)*26+12] = -add_A
 		# 		Q4s_all_limbs.append(Q4s)
-
-
 		# 	b2[contact[3]] = 1
 
 
 		if self.print_level == 1:
 			print("wrench vertices from limb 1",A[0:3,0:26])
 			# print("active vertex",A[3:6,9+26])
-		
-
-
-
-
-
 		if NofContacts > 0:
 
 			if self.solver == 'cvxpy':
@@ -332,9 +303,7 @@ class robosimianSimulator:
 
 				x_k = self.x.value[0:12]
 				wc = x_k
-				#debug
-				#print('ground reaction force',x_k)
-				#print(A[0:26])
+
 				if self.RL:
 					print('ground reaction force',x_k)
 					print('ankle poses:',self.ankle_poses)
@@ -344,11 +313,7 @@ class robosimianSimulator:
 					print('acceleration')
 					print(C + D@x_k)
 					print('objective value',(self.C.value+self.D.value@self.x.value[0:12]).T@self.M.value@(self.C.value+self.D.value@self.x.value[0:12]))
-				#print(C,D)
-				#v_k_1 = self.C.value+D@wc*self.dt
 
-				#print('objectove value:',v_k_1.T@self.M.value@v_k_1)
-				# print('lambdas',self.x.value[12:12+26])
 				if not self.prob.status == "optimal":
 					print("cvxpy status:", self.prob.status)
 			
@@ -433,37 +398,6 @@ class robosimianSimulator:
 				if continuous_simulation:
 					self.q_dot = C*self.integrate_dt + self.q_dot+D@wc*self.integrate_dt
 
-			elif self.solver == 'mpqp':
-
-				D_prime = D*self.dt
-				C_prime = C*self.dt
-				M = self.robot.get_mass_matrix()
-				H = D_prime.T@M@D_prime
-				g = (self.q_dot.T + C_prime.T)@M@D
-				g = g.T
-				gw = A.T@g
-				Hw = A.T@H@A
-				Hw.astype(np.float32)
-				gw.astype(np.float32)
-
-				start_time = time.time()
-				# initw = np.array([0,0,0,0,0,0,0,0,0,0,0,0])
-				w2,dwdg2,dwdh2=self.mpqp.solve_QP(gw,Hw,mu=1e-10,prec=512)
-				print('time elapsed',time.time() - start_time)
-				# w2,dwdg2,dwdh2=self.mpqp.solve_QP(gw,Hw,initw = w2,prec=512)
-				# print('time elapsed',time.time() - start_time)
-				w2 = np.array(w2)[np.newaxis].T
-				print('ground reaction force',A@w2)
-
-				
-				#v_k_1 = self.q_dot + C + D@A@w2
-				#print('objectove value:',v_k_1.T@M@v_k_1)
-				wc = A@w2
-
-				if continuous_simulation:
-					self.q_dot = C*self.integrate_dt+D@wc*self.integrate_dt #? Is this wrong
-
-
 		else:
 			#### uncomment this to have a continuous simulation....
 			if continuous_simulation:
@@ -489,7 +423,6 @@ class robosimianSimulator:
 
 			self.robot.set_q_2D(self.q)
 			self.robot.set_q_dot_2D(self.q_dot)
-
 
 		#################################################################
 		if fixed:
