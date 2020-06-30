@@ -132,13 +132,15 @@ class robosimianSimulator:
 					ee.detectEndEffector(self.robot.body,zRange)
 					ees.append(ee)
 
-			#create the simulator
-			self.robot.create_simulator(accuracy=64,granular=True)     #this will use double
+			#create the simulator, use RK1F mode, force-level MDP
+			self.robot.create_simulator(accuracy=64,granular=True,mode = DNE.FORWARD_RK1F)     #this will use double
 			#self.robot.create_simulator(accuracy=128)    #this will use quadmath
 			#self.robot.create_simulator(accuracy=512)    #this will use MPFR
 
 			#set the floor
 			self.robot.set_floor([0,0,1,0],ees) # the list means Ax+By+Cz+D = 0. This basically sets a z = 0 plane.
+
+
 		else:
 			raise Exception('Wrong Dyn given')
 
@@ -170,33 +172,45 @@ class robosimianSimulator:
 		elif self.dyn == 'DiffNE':
 			#self.robot.()
 			pass
+
 	def getDyn(self,x,u,continuous = False):
 		"""
 		Parameters:
 		---------------
 		x,u are 1d vectors
+		u is of dimension 12
+		Return:
+		---------------
+		a: np 1D array
+		if continuous, also return the state (np 1D array)
 		"""
-		if not continuous:
-			q = x[0:15]
-			q_dot = x[15:30]
-			self.q = q[np.newaxis].T
-			self.q_dot = q_dot[np.newaxis].T
+		q = x[0:15]
+		q_dot = x[15:30]
+		self.q = q[np.newaxis].T
+		self.q_dot = q_dot[np.newaxis].T
 
+		if self.dyn == 'own':
 			self.robot.set_q_2D_(q)
 			self.robot.set_q_dot_2D_(q_dot)
 			force,a = self.simulateOnce(u, continuous_simulation = continuous)
+		else:
+			qdq = x.tolist()
+			tau = [0,0,0] + u.tolist() #diffNE has control on all dofs
+			qdqNext,Dqdq,Dtau=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=True,Dtau=True)
+			a = (np.array(qdqNext[15:30]) - x[0:15])/self.dt
+			#flip the axes
+			a = self._own_to_diffne(q = a)
+
+
+		if not continuous:
 			return a
 		else:
-			q = x[0:15]
-			q_dot = x[15:30]
-			self.q = q[np.newaxis].T
-			self.q_dot = q_dot[np.newaxis].T
-
-			self.robot.set_q_2D_(q)
-			self.robot.set_q_dot_2D_(q_dot)
-			force,a = self.simulateOnce(u, continuous_simulation = continuous)
-			return a,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
-
+			if self.dyn == 'own':
+				return a,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
+			else:
+				self.q = qdqNext[0:15][np.newaxis].T
+				self.q_dot = qdqNext[15:30][np.newaxis].T
+				return a,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
 	def getStaticTorques(self,x):
 		q = x[0:15]
@@ -231,7 +245,6 @@ class robosimianSimulator:
 		"""
 
 		return copy(self.q_dot.ravel())
-
 
 	def simulateOnce(self,u,continuous_simulation = False, SA = False, fixed = False):#debug,counter):
 		"""
@@ -470,12 +483,6 @@ class robosimianSimulator:
 			##what do you return when you do RL?
 			return 
 
-
-
-
-
-
-
 	def simulate(self,total_time,plot = False, fixed = True,visualize = False):
 		world = self.robot.get_world()
 		if visualize:
@@ -535,9 +542,7 @@ class robosimianSimulator:
 			x_traj = np.vstack((x_traj,np.ravel(self.q)))
 
 		return x_traj
-
-
-		
+	
 	def getWorld(self):
 		return self.robot.get_world()
 
@@ -674,7 +679,6 @@ class robosimianSimulator:
 		self.robot.set_q_dot_2D(initial_q_dot)
 		return dadx
 
-
 	def generateContacts(self):
 		##How to generate contact on a curved surface needs a bit more thoughts/care
 		"""Right not do not handle the case where a rigid body's angle is > pi/2.."""
@@ -788,7 +792,7 @@ class robosimianSimulator:
 
 		return q_clamp	
 
-	def _own_to_diffne(self,q,J):
+	def _own_to_diffne(self,q = None,J = None):
 		"""
 		parameters:
 		--------------	
@@ -813,6 +817,7 @@ class robosimianSimulator:
 			return q_new
 		else:
 			return J_new
+
 
 	def _set_DiffNE_q(self,q):
 		"""
