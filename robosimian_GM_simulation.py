@@ -34,6 +34,7 @@ class robosimianSimulator:
 		self.dt = dt
 		self.integrate_dt = integrate_dt
 		self.time = 0
+		self.dof = 15
 		if self.dyn == 'own':
 			self.robot = robosimian(print_level = print_level, RL = RL)
 			self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
@@ -104,63 +105,40 @@ class robosimianSimulator:
 			#TODO, change collision mesh size
 			self.robot =  DiffNERobotModel(world,"Robosimian/robosimian_caesar_new_all_active.urdf",use2DBase=True)
 			#specify fixed joints
-			unusedJoints=["limb1_link3","limb1_link5","limb1_link7",
-			"limb2_link3","limb2_link5","limb2_link7",
-			"limb3_link3","limb3_link5","limb3_link7",
-			"limb4_link3","limb4_link5","limb4_link7"]
+			unusedJoints=["limb1_link0","limb1_link1","limb1_link3","limb1_link5","limb1_link7",
+			"limb2_link0","limb2_link1","limb2_link3","limb2_link5","limb2_link7",
+			"limb3_link0","limb3_link1","limb3_link3","limb3_link5","limb3_link7",
+			"limb4_link0","limb4_link1","limb4_link3","limb4_link5","limb4_link7"]
 			self.robot.eliminate_joints(unusedJoints)
-			##debugging:
-			#print(self.robot.num_DOF())
-			#print(self.robot.print_DMap())
-			#print(type(pyDiffNE.Vecd([0.1,0.1])))
-			print('-------')
-			self.robot.set_joint_angle("baseTrans", 0.1)
-			self.robot.set_joint_angle("baseRot+torso",0.1)
 
-			self.robot.qdq[0] = 0.0
-			self.robot.qdq[1] = 0.0
-			self.robot.qdq[2] = 0.0
-			#print(self.robot.qdq,np.shape(self.robot.qdq))
-			#print('flag3')
-			# #Q:
-			# #add torso position and angle??
-			# #can you do this?
-			# #TODO:can you add to self.robot.qdq directly?
-			# #set initial joint positions
-			# self.robot.set_joint_angle("limb1_link2", self.q[3,0])
-			# self.robot.set_joint_angle("limb1_link4", self.q[4,0])
-			# self.robot.set_joint_angle("limb1_link6", self.q[5,0])
-			# self.robot.set_joint_angle("limb2_link2", self.q[6,0])
-			# self.robot.set_joint_angle("limb2_link4", self.q[7,0])
-			# self.robot.set_joint_angle("limb2_link6", self.q[8,0])
-			# self.robot.set_joint_angle("limb3_link2", self.q[9,0])
-			# self.robot.set_joint_angle("limb3_link4", self.q[10,0])
-			# self.robot.set_joint_angle("limb3_link6", self.q[11,0])
-			# self.robot.set_joint_angle("limb4_link2", self.q[12,0])
-			# self.robot.set_joint_angle("limb4_link4", self.q[13,0])
-			# self.robot.set_joint_angle("limb4_link6", self.q[14,0])
+			#now set the initial config
+			self._set_DiffNE_q2(self.q)
+			self._set_DiffNE_q_dot2(self.q_dot)
 
-			# #only not granular needs ees to set the floor (referring to https
-			# #://bitbucket.org/runningblade/diffne/src/master/Main/mainDebugMDPSimulatorRobosimianKlampt.py)
+			#set up collision detection
+			ees=[]
+			for i in range(self.robot.body.nrJ()):
+				if len(self.robot.body.children(i,True))==0:
+					ee=DNE.EndEffectorBounds(i)
+					zRange=DNE.Vec3d(0,0,0)
+					if   self.robot.body.joint(i)._name.startswith("limb1"):
+						zRange=DNE.Vec3d(-0.1,0,0)
+					elif self.robot.body.joint(i)._name.startswith("limb2"):
+						zRange=DNE.Vec3d( 0.1,0,0)
+					elif self.robot.body.joint(i)._name.startswith("limb3"):
+						zRange=DNE.Vec3d( 0.1,0,0)
+					elif self.robot.body.joint(i)._name.startswith("limb4"):
+						zRange=DNE.Vec3d(-0.1,0,0)
+					ee.detectEndEffector(self.robot.body,zRange)
+					ees.append(ee)
 
-			# self.robot.create_simulator(accuracy=64,granular=True)     #this will use double
-			# #m.create_simulator(accuracy=128)    #this will use quadmath
-			# #m.create_simulator(accuracy=512)    #this will use MPFR
-			# #m.set_PD_controller(1000,1)
+			#create the simulator
+			self.robot.create_simulator(accuracy=64,granular=True)     #this will use double
+			#self.robot.create_simulator(accuracy=128)    #this will use quadmath
+			#self.robot.create_simulator(accuracy=512)    #this will use MPFR
 
-			# #Q: set floor?
-			# self.robot.set_floor([0,0,10,20],ees)
-			# self.robot.qdq[2]=math.pi/4
-			# #TODO:need to check dimension of qdq
-
-			# #run this for debugging
-			# #visualizer
-			# vis=GLVisualizer(world,None,m.robot,m)
-			# vis.qdq0=copy.deepcopy(m.qdq)
-			# vis.run()
-
-
-
+			#set the floor
+			self.robot.set_floor([0,0,1,0],ees) # the list means Ax+By+Cz+D = 0. This basically sets a z = 0 plane.
 		else:
 			raise Exception('Wrong Dyn given')
 
@@ -817,23 +795,62 @@ class robosimianSimulator:
 		q: 1d numpy array
 		J: 2d numpy array
 		"""
-		indeces = [1]
+		indeces = [1] + [3,4,5,6,7,8,9,10,11,12,13,14] + [16] + [18,19,20,21,22,23,24,25,26,27,28,29]
 		if q:		
-			(m,) = np.shape(q)
-			q_new = np.zeros(m)
-
-		if J:
-			(m,n) = np.shape(J)
-			J_new = np.zeros((m,n))
-		for
-		 i in indeces:
+			q_new = copy.deepcopy(q)
+		elif J:
+			J_new = copy.deepcopy(J)
+		else:
+			raise RuntimeError('_own_to_diffne():wrong input for')
+		for i in indeces:
 			if q:
+				q_new[i] = -q_new[i]
+			elif J:
+				#each column corresponds to each dof
+				J_new[:,i] = -J_new[:,i]
 
-		if isinstance(q,list):
-			q2 = []
-		elif isinstance(q,np.ndarray):
-			q2
+		if q:
+			return q_new
+		else:
+			return J_new
 
+	def _set_DiffNE_q(self,q):
+		"""
+		Parameters:
+		-------------
+		q is a 1d numpy array
+		"""
+		for i in range(self.dof):
+			self.robot.qdq[i] = q[i]
+		return
+	def _set_DiffNE_q2(self,q):
+		"""
+		Parameters:
+		-------------
+		q is a 2d numpy array
+		"""
+		for i in range(self.dof):
+			self.robot.qdq[i] = q[i,0]		
+		return
+
+	def _set_DiffNE_q_dot(self,q_dot):
+		"""
+		Parameters:
+		-------------
+		q_dot is a 1d numpy array
+		"""
+		for i in range(self.dof):
+			self.robot.qdq[i+self.dof] = q_dot[i]
+		return
+	def _set_DiffNE_q_dot2(self,q_dot):
+		"""
+		Parameters:
+		-------------
+		q_dot is a 2d numpy array
+		"""
+		for i in range(self.dof):
+			self.robot.qdq[i+self.dof] = q_dot[i,0]
+		return
 
 	def closePool(self):
 		self.compute_pool.close()
@@ -848,6 +865,8 @@ if __name__=="__main__":
 	q_dot_2D = np.array([0.0]*15)[np.newaxis].T
 	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, dyn = 'own',print_level = 0,augmented = True,\
 		extrapolation = True,integrate_dt = 0.05)
+	
+	
 	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
 	# 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
 
