@@ -20,6 +20,7 @@ import multiprocessing as mp
 
 #Zherong's package
 from KlamptDiffNE import *
+import pyDiffNE
 import pickle,copy
 
 
@@ -101,18 +102,26 @@ class robosimianSimulator:
 		elif self.dyn == 'DiffNE':
 			world = klampt.WorldModel()
 			#TODO, change collision mesh size
-			self.robot =  DiffNERobotModel(world,"data/robosimian_caesar_new_all_active.urdf",use2DBase=True)
+			self.robot =  DiffNERobotModel(world,"Robosimian/robosimian_caesar_new_all_active.urdf",use2DBase=True)
 			#specify fixed joints
 			unusedJoints=["limb1_link3","limb1_link5","limb1_link7",
 			"limb2_link3","limb2_link5","limb2_link7",
 			"limb3_link3","limb3_link5","limb3_link7",
 			"limb4_link3","limb4_link5","limb4_link7"]
 			self.robot.eliminate_joints(unusedJoints)
-
 			##debugging:
-			print(self.robot.num_DOF)
-			print(self.robot.qdq,np.shape(self.robot.qdq))
+			#print(self.robot.num_DOF())
+			#print(self.robot.print_DMap())
+			#print(type(pyDiffNE.Vecd([0.1,0.1])))
+			print('-------')
+			self.robot.set_joint_angle("baseTrans", 0.1)
+			self.robot.set_joint_angle("baseRot+torso",0.1)
 
+			self.robot.qdq[0] = 0.0
+			self.robot.qdq[1] = 0.0
+			self.robot.qdq[2] = 0.0
+			#print(self.robot.qdq,np.shape(self.robot.qdq))
+			#print('flag3')
 			# #Q:
 			# #add torso position and angle??
 			# #can you do this?
@@ -181,8 +190,8 @@ class robosimianSimulator:
 
 		#TODO:
 		elif self.dyn == 'DiffNE':
-			self.robot.()
-
+			#self.robot.()
+			pass
 	def getDyn(self,x,u,continuous = False):
 		"""
 		Parameters:
@@ -801,23 +810,43 @@ class robosimianSimulator:
 
 		return q_clamp	
 
+	def _own_to_diffne(self,q,J):
+		"""
+		parameters:
+		--------------	
+		q: 1d numpy array
+		J: 2d numpy array
+		"""
+		indeces = [1]
+		if q:		
+			(m,) = np.shape(q)
+			q_new = np.zeros(m)
+
+		if J:
+			(m,n) = np.shape(J)
+			J_new = np.zeros((m,n))
+		for
+		 i in indeces:
+			if q:
+
+		if isinstance(q,list):
+			q2 = []
+		elif isinstance(q,np.ndarray):
+			q2
+
+
 	def closePool(self):
 		self.compute_pool.close()
+
+
 
 if __name__=="__main__":
 
 	#q_2D = np.array(configs.q_staggered_augmented)[np.newaxis] #four feet on the ground at the same time
-	q_2D = np.array(configs.q_test17)[np.newaxis]
+	q_2D = np.array(configs.q_test17)[np.newaxis].T
 	# q_2D = np.array(configs.q_symmetric)[np.newaxis] #symmetric limbs
-	#print(q_2D)
-	#q_2D[0,3] = q_2D[0,3] + 0.5
-	q_dot_2D = np.array([0.0]*15)[np.newaxis]
-
-
-
-	q_2D = q_2D.T
-	q_dot_2D = q_dot_2D.T
-	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, solver = 'cvxpy',print_level = 0,augmented = True,\
+	q_dot_2D = np.array([0.0]*15)[np.newaxis].T
+	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, dyn = 'own',print_level = 0,augmented = True,\
 		extrapolation = True,integrate_dt = 0.05)
 	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
 	# 	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
@@ -828,8 +857,8 @@ if __name__=="__main__":
 	#print(t)
 	#print(configs.u)
 	#np.savetxt('staticTorque1',t)
-	simulator.simulate(9, fixed = True,visualize = True)
-	# simulator.debugSimulation()
+	#simulator.simulate(9, fixed = True,visualize = True)
+	simulator.debugSimulation()
 	# #Q = np.array(configs.q_staggered_augmented + [0]*15)
 	# #Q[3] = Q[3] + 0.5
 	# #U = np.array(configs.u_augmented_mosek)

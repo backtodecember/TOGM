@@ -1,73 +1,177 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from klampt.math import vectorops as vo
-def trajectory_loader(start,end,dt,number):
-	"""
-	load a trajectory into desired start and end, with  desired dt
+import math
 
-	"""
-	if number == 2:
-		#1st second is standing still, the rest of 8 second is walking (1,3 swing first, then 2,4 swing)
-		original_dt = 0.005
-		start_walking  = 1.0
-		end_walking = 10.0
-		scale = round(dt/original_dt)
-		path = "results/PID_trajectory/1/"
-		q_history = np.load(path + "q_history.npy")[200:2001]
-		q_dot_history = np.load(path + "q_dot_history.npy")[200:2001]
-		time_history = np.load(path + "time_history.npy")[200:2001]
-		u_history = np.load(path + "u_history.npy")[200:2001]
-		multiplier = round(dt/original_dt)
-		q = []
-		q_dot = []
-		time = []
-		u = []
-		for i in range(len(q_history)):
-			if i%multiplier == 0:
-				q.append(q_history[i])
-				q_dot.append(q_dot_history[i])
-				time.append(time_history[i]-start_walking)
-				u_total = [0.0]*12
-				counter = 0
-				for j in range(multiplier):
-					if i+j > 1800:
-						break 
-					u_total = vo.add(u_total,u_history[i+j])
-					counter += 1
-				u.append(vo.div(u_total,counter))
+def sqrt_safe(x):
+    return math.sqrt(x)
 
-		q.append(q_history[-1])
-		q_dot.append(q_dot_history[-1])
-		time.append(time_history[-1])
-		u.append(u_history[-1])
+def sin_safe(x):
+    return math.sin(x)
 
+def cos_safe(x):
+    return math.cos(x)
+    
+def asin_safe(x):
+    return math.asin(x)
 
-		print('----q ranges-----')
-		for i in range(15):
-			print(np.max(np.array(q)[:,i]),np.min(np.array(q)[:,i]))
-		print('----q_dot rabges-----')
-		for i in range(15):
-			print(np.max(np.array(q_dot)[:,i]),np.min(np.array(q_dot)[:,i]))
+def acos_safe(x):
+    return math.acos(x)
+    
+def atan2_safe(y,x):
+    return math.atan2(y,x)
 
-		print('----u ranges ------')
-		for i in range(12):
-			print(np.max(np.array(u)[:,i]),np.min(np.array(u)[:,i]))
+def floor_safe(x):
+    return math.floor(x)
 
-		#print(time,q[0][0],q[-1][0])
-		
+def ceil_safe(x):
+    return math.ceil(x)
 
-		np.save('results/PID_trajectory/2/q_init_guess.npy',np.array(q))
-		np.save('results/PID_trajectory/2/q_dot_init_guess.npy',np.array(q_dot))
-		np.save('results/PID_trajectory/2/u_init_guess.npy',np.array(u))
-		np.save('results/PID_trajectory/2/time_init_guess.npy',np.array(time))
+def log_safe(x):
+    return math.log(x)
 
+def is_float(a):
+    return  isinstance(a,float) or isinstance(a,np.float64) or  \
+            isinstance(a,np.float128) or isinstance(a,int)
 
-		#print(len(q_history),len(u_history))
+def is_scalar(a):
+    return not isinstance(a,list) and not isinstance(a,tuple)
 
-		#print(np.shape(q_history))
-		# plt.plot(time_history,q_history[:,4])
-		# plt.show()
+def cross(a,b):
+    axb=[None,None,None]
+    axb[0]=(a[1]*b[2])-(a[2]*b[1])
+    axb[1]=(a[2]*b[0])-(a[0]*b[2])
+    axb[2]=(a[0]*b[1])-(a[1]*b[0])
+    return axb
 
-if __name__=="__main__":
-	trajectory_loader(start = 1.0,end = 10.0,dt = 0.05, number = 2)
-	#print(round(0.08/0.01))
+def cross_mat(v):
+    #    0,-v[2], v[1],
+    # v[2],    0,-v[0],
+    #-v[1],val v[0],    0;
+    ret=[[0.0 for c in range(3)] for r in range(3)]
+    ret[0][1]=-v[2]
+    ret[0][2]= v[1]
+    ret[1][0]= v[2]
+    ret[1][2]=-v[0]
+    ret[2][0]=-v[1]
+    ret[2][1]= v[0]
+    return ret
+
+def abs_max(a):
+    if is_scalar(a):
+        return abs(a)
+    ret=0.0
+    for v in a:
+        val=abs_max(v)
+        if val>ret:
+            ret=val
+    return ret
+
+def dot(a,b):
+    if is_scalar(a):
+        return a*b
+    elif is_scalar(b):
+        return a*b
+    else:
+        ret=0
+        for ai,bi in zip(a,b):
+            ret+=dot(ai,bi)
+        return ret
+    
+def shape(m):
+    return (len(m),len(m[0]))
+    
+def norm(a):
+    return sqrt_safe(dot(a,a))
+    
+def mul(a,b):
+    if a is None:
+        return b
+    elif b is None:
+        return a
+    elif is_scalar(a):
+        if is_scalar(b):
+            return a*b
+        else: return [mul(a,bi) for bi in b]
+    elif is_scalar(b):
+        if is_scalar(a):
+            return a*b
+        else: return [mul(ai,b) for ai in a]
+    else: return [mul(ai,bi) for ai,bi in zip(a,b)]
+    
+def matmul(a,b):
+    assert len(a[0])==len(b)
+    ret=[[0.0 for c in range(len(b[0]))] for r in range(len(a))]
+    for r in range(len(a)):
+        for c in range(len(b[0])):
+            for k in range(len(a[0])):
+                ret[r][c]+=a[r][k]*b[k][c]
+    return ret
+
+def catcol(a,b):
+    assert len(a)==len(b)
+    return [ai+bi for ai,bi in zip(a,b)]
+
+def matTmul(a,b):
+    assert len(a)==len(b)
+    ret=[[0.0 for c in range(len(b[0]))] for r in range(len(a[0]))]
+    for r in range(len(a[0])):
+        for c in range(len(b[0])):
+            for k in range(len(a)):
+                ret[r][c]+=a[k][r]*b[k][c]
+    return ret
+
+def matvecmul(a,b):
+    assert len(a[0])==len(b)
+    ret=[0.0 for r in range(len(a))]
+    for r in range(len(a)):
+        for c in range(len(b)):
+                ret[r]+=a[r][c]*b[c]
+    return ret
+
+def matTvecmul(a,b):
+    assert len(a)==len(b)
+    ret=[0.0 for r in range(len(a[0]))]
+    for r in range(len(a[0])):
+        for c in range(len(b)):
+                ret[r]+=a[c][r]*b[c]
+    return ret
+
+def transpose(a):
+    ret=[[0.0 for c in range(len(a))] for r in range(len(a[0]))]
+    for r in range(len(a)):
+        for c in range(len(a[0])):
+            ret[c][r]=a[r][c]
+    return ret
+
+def muldiagAB(a,b):
+    return [mul(a,b[i]) for i in range(b)]
+
+def add(a,b):
+    if a is None:
+        return b
+    elif b is None:
+        return a
+    elif is_scalar(a):
+        if is_scalar(b):
+            return a+b
+        else: return [add(a,bi) for bi in b]
+    elif is_scalar(b):
+        if is_scalar(a):
+            return a+b
+        else: return [add(ai,b) for ai in a]
+    else: return [add(ai,bi) for ai,bi in zip(a,b)]
+
+def sub(a,b):
+    if a is None:
+        return b
+    elif b is None:
+        return a
+    elif is_scalar(a):
+        if is_scalar(b):
+            return a-b
+        else: return [sub(a,bi) for bi in b]
+    elif is_scalar(b):
+        if is_scalar(a):
+            return a-b
+        else: return [sub(ai,b) for ai in a]
+    else: return [sub(ai,bi) for ai,bi in zip(a,b)]
+    
