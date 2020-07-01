@@ -315,3 +315,6 @@ if __name__=="__main__":
 	# print('Max Dynamics Constr:',np.sort(np.array(dyn_constr)))
 	# print('Ankle Pose Constr:',knitro_con[5401:5401+181*8])
 	# print('Enough Translation Constr:',knitro_con[5401+181*8:5401+181*8+1])
+
+	raise Exception('xxx')
+	print('flag')

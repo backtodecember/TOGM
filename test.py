@@ -24,10 +24,23 @@ from klampt.io import loader
 # print('t[-1]:',t[-1])
 
 #traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
-u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
-x_guess = np.load('results/PID_trajectory/2/x_init_guess.npy')
+# u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+# x_guess = np.load('results/PID_trajectory/2/x_init_guess.npy')
 
-print(np.shape(u_guess),np.shape(x_guess))
+# print(np.shape(u_guess),np.shape(x_guess))
 
 # np.save('results/PID_trajectory/2/x_init_guess.npy',x)
 # np.save('results/PID_trajectory/2/u_init_guess.npy',u)
+
+a = [1,2]
+b = np.array(a)
+print(type(a),type(b))
+if isinstance(a,list):
+    print('list')
+if isinstance(b,np.ndarray):
+    print('numpy array')    
+
+(m,) = np.shape(a)
+N = len(a)
+print(m)
+print(N)
