@@ -26,7 +26,7 @@ class Robosimian(System):
 		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
 
 		#Test 14+ should have extraploation set to be True
-		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = 0.05,solver = 'cvxpy', augmented = True, extrapolation = True, integrate_dt = 0.05)
+		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = 0.05,dyn = 'diffne', augmented = True, extrapolation = True, integrate_dt = 0.05)
 
 	def dyn(self,t,x,u,p=None):  
 		a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
@@ -356,7 +356,9 @@ problem.addNonLinearObj(c2)
 problem.addNonLinearPointConstr(constr1,path = True)
 
 
-
+############################
+#preprocess                #
+############################
 
 startTime = time.time()
 
@@ -366,7 +368,12 @@ startTime = time.time()
 problem.pre_process(dyn_tol = 0.005,snopt_mode = False)
 print('preProcess took:',time.time() - startTime)
 
-##Optimizer parameter setting
+
+###############################
+##Optimizer parameter setting##
+###############################
+
+
 #print_level 1 for SNOPT is verbose enough
 #print_level 0-12 for IPOPT 5 is appropriate, 6 more detailed
 # cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 10000000)
@@ -386,10 +393,14 @@ print('preProcess took:',time.time() - startTime)
 ##1097 KN_PARAM_INITPENALTY
 ##1049 adopt flexible penalty parameter in the merit function to weight feasibility vs optimality
 ##debug information 1032
-options = {'1014':10,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':0,'1097':500.0,'1049':1,'1031':1,'history':True}
-cfg = OptConfig(backend = 'knitro', **options)
-slv = OptSolver(problem, cfg)
+# options = {'1014':10,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':0,'1097':500.0,'1049':1,'1031':1,'history':True}
+# cfg = OptConfig(backend = 'knitro', **options)
+# slv = OptSolver(problem, cfg)
 
+
+###############################
+##Initial Guess              ##
+###############################
 
 
 ###setting 1-13
@@ -417,7 +428,12 @@ u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
 guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)#,obj = [0,16.0])
 
 
-###same initial guess
+
+
+###############################
+###save initial guess        ##
+###############################
+
 init_flag = False
 if init_flag:
 	parsed_result = problem.parse_f(guess)
