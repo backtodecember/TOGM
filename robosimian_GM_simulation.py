@@ -100,7 +100,7 @@ class robosimianSimulator:
 			self.mudhyx = np.zeros((self.Dx+self.Du,self.Dwc+self.Dlambda))
 			self.dhx = np.zeros((120,self.Dx+self.Du))
 
-		elif self.dyn == 'DiffNE':
+		elif self.dyn == 'diffne':
 			world = klampt.WorldModel()
 			#TODO, change collision mesh size
 			self.robot =  DiffNERobotModel(world,"Robosimian/robosimian_caesar_new_all_active.urdf",use2DBase=True)
@@ -148,11 +148,11 @@ class robosimianSimulator:
 		if self.RL:
 			self.ankle_poses = np.zeros((8,1))
 
-	def getDynJac(self,x,u,continuous = False):
+	def getDynJac(self,x,control,continuous = False):
 		"""
 		Parameters:
 		---------------
-		x,u are 1d vectors
+		x,u are 1d numpy arrays
 		u is of dimension 12
 		Return:
 		---------------
@@ -160,8 +160,16 @@ class robosimianSimulator:
 		DynJac: np array 30 x 42
 		if continuous, also return the state (np 1D array)
 		"""
-		q = x[0:15]
-		q_dot = x[15:30]
+		#flip axis for diffne
+		if self.dyn == 'own':
+			q = x[0:15]
+			q_dot = x[15:30]
+			u = deepcopy(control)
+		else:
+			q = self._own_to_diffne(x[0:15])
+			q_dot = self._own_to_diffne(x[15:30])
+			u = -deepcopy(control)
+
 		self.q = q[np.newaxis].T
 		self.q_dot = q_dot[np.newaxis].T
 
@@ -174,7 +182,7 @@ class robosimianSimulator:
 			tau = [0,0,0] + u.tolist() #diffNE has control on all dofs
 			qdqNext,Dqdq,Dtau=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=True,Dtau=True)
 			a = (np.array(qdqNext[15:30]) - x[0:15])/self.dt
-			#flip the axes
+			#flip the axes back
 			a = self._own_to_diffne(q = a)
 
 			#calcualte DynJac
@@ -189,7 +197,7 @@ class robosimianSimulator:
 			dadx = np.hstack((dadq,dadq_dot,dadtau))
 
 			DynJac = np.hstack((dq_dotdx,dadx))
-			#now flip the axes
+			#now flip the axes back
 			DynJac = self._own_to_diffne(J = DynJac)
 		if not continuous:
 			return a,DynJac
@@ -201,7 +209,7 @@ class robosimianSimulator:
 				self.q_dot = qdqNext[15:30][np.newaxis].T
 				return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
-	def getDyn(self,x,u,continuous = False):
+	def getDyn(self,x,control,continuous = False):
 		"""
 		Parameters:
 		---------------
@@ -212,8 +220,16 @@ class robosimianSimulator:
 		a: np 1D array
 		if continuous, also return the state (np 1D array)
 		"""
-		q = x[0:15]
-		q_dot = x[15:30]
+		#flip axis for diffne
+		if self.dyn == 'own':
+			q = x[0:15]
+			q_dot = x[15:30]
+			u = deepcopy(control)
+		else:
+			q = self._own_to_diffne(x[0:15])
+			q_dot = self._own_to_diffne(x[15:30])
+			u = -deepcopy(control)
+
 		self.q = q[np.newaxis].T
 		self.q_dot = q_dot[np.newaxis].T
 
@@ -226,7 +242,7 @@ class robosimianSimulator:
 			tau = [0,0,0] + u.tolist() #diffNE has control on all dofs
 			qdqNext,_,_=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=False,Dtau=False)
 			a = (np.array(qdqNext[15:30]) - x[0:15])/self.dt
-			#flip the axes
+			#flip the axes back
 			a = self._own_to_diffne(q = a)
 
 		if not continuous:
@@ -247,7 +263,7 @@ class robosimianSimulator:
 		self.robot.set_q_2D_(q)
 		self.robot.set_q_dot_2D_(q_dot)
 		u = 0
-		a,t = self.simulateOnce(u, fixed = True)
+		_,t = self.simulateOnce(u, fixed = True)
 		return t
 
 	def simulateOnceRL(self,u):
@@ -830,21 +846,21 @@ class robosimianSimulator:
 		q: 1d numpy array
 		J: 2d numpy array
 		"""
-		indeces = [1] + [3,4,5,6,7,8,9,10,11,12,13,14] + [16] + [18,19,20,21,22,23,24,25,26,27,28,29]
-		if q:		
+		indeces = [1] + [3,4,5,6,7,8,9,10,11,12,13,14] #+ [16] + [18,19,20,21,22,23,24,25,26,27,28,29]
+		if q is not None:		
 			q_new = copy.deepcopy(q)
-		elif J:
+		elif J is not None:
 			J_new = copy.deepcopy(J)
 		else:
 			raise RuntimeError('_own_to_diffne():wrong input for')
 		for i in indeces:
-			if q:
+			if q is not None:
 				q_new[i] = -q_new[i]
-			elif J:
+			elif J is not None:
 				#each column corresponds to each dof
 				J_new[:,i] = -J_new[:,i]
 
-		if q:
+		if q is not None:
 			return q_new
 		else:
 			return J_new
@@ -895,12 +911,12 @@ class robosimianSimulator:
 
 if __name__=="__main__":
 
-	#q_2D = np.array(configs.q_staggered_augmented)[np.newaxis] #four feet on the ground at the same time
-	q_2D = np.array(configs.q_test17)[np.newaxis].T
-	# q_2D = np.array(configs.q_symmetric)[np.newaxis] #symmetric limbs
-	q_dot_2D = np.array([0.0]*15)[np.newaxis].T
-	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, dyn = 'own',print_level = 0,augmented = True,\
-		extrapolation = True,integrate_dt = 0.05)
+	# #q_2D = np.array(configs.q_staggered_augmented)[np.newaxis] #four feet on the ground at the same time
+	# q_2D = np.array(configs.q_test17)[np.newaxis].T
+	# # q_2D = np.array(configs.q_symmetric)[np.newaxis] #symmetric limbs
+	# q_dot_2D = np.array([0.0]*15)[np.newaxis].T
+	# simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, dyn = 'own',print_level = 0,augmented = True,\
+	# 	extrapolation = True,integrate_dt = 0.05)
 	
 	
 	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
@@ -913,8 +929,30 @@ if __name__=="__main__":
 	#print(configs.u)
 	#np.savetxt('staticTorque1',t)
 	#simulator.simulate(9, fixed = True,visualize = True)
-	simulator.debugSimulation()
+	#simulator.debugSimulation()
 	# #Q = np.array(configs.q_staggered_augmented + [0]*15)
 	# #Q[3] = Q[3] + 0.5
 	# #U = np.array(configs.u_augmented_mosek)
 	# #a,j = simulator.getDynJac(Q, U)
+
+	
+	##### debug for dynjac
+	#q_2D = np.array(configs.q_test17)
+	q_2D = np.array([0.0,1.0,0.0]+[0.0]*12)
+	q_dot_2D = np.array([0.0]*15)
+	x = np.hstack((q_2D,q_dot_2D))
+	q_2D = q_2D[np.newaxis].T
+	q_dot_2D = q_dot_2D[np.newaxis].T
+
+	u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
+	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
+	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, dyn = 'own',print_level = 0,augmented = True,\
+		extrapolation = True,integrate_dt = 0.05)
+	a1 = simulator.getDyn(x,u)
+	
+	simulator2 = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, dyn = 'diffne',print_level = 0,augmented = True,\
+		extrapolation = True,integrate_dt = 0.05)
+	a2 = simulator2.getDyn(x,u)
+
+	print('Own:',a1)
+	print('diffne:',a2)
