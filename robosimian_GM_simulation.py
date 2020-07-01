@@ -151,8 +151,14 @@ class robosimianSimulator:
 	def getDynJac(self,x,u,continuous = False):
 		"""
 		Parameters:
-		--------------
+		---------------
 		x,u are 1d vectors
+		u is of dimension 12
+		Return:
+		---------------
+		a: np 1D array
+		DynJac: np array 30 x 42
+		if continuous, also return the state (np 1D array)
 		"""
 		q = x[0:15]
 		q_dot = x[15:30]
@@ -162,16 +168,38 @@ class robosimianSimulator:
 		if self.dyn == 'own':
 			self.robot.set_q_2D_(q)
 			self.robot.set_q_dot_2D_(q_dot)
-			force,a,DynJac = self.simulateOnce(u,continuous_simulation = continuous,SA = True)
-			if not continuous:		
-				return a,DynJac
-			else:
-				return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
+			_,a, DynJac = self.simulateOnce(u, continuous_simulation = continuous, SA = True)
+		else:
+			qdq = x.tolist()
+			tau = [0,0,0] + u.tolist() #diffNE has control on all dofs
+			qdqNext,Dqdq,Dtau=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=True,Dtau=True)
+			a = (np.array(qdqNext[15:30]) - x[0:15])/self.dt
+			#flip the axes
+			a = self._own_to_diffne(q = a)
 
-		#TODO:
-		elif self.dyn == 'DiffNE':
-			#self.robot.()
-			pass
+			#calcualte DynJac
+			Dqdq = np.array(Dqdq) #30-by-30
+			Dtau = np.array(Dtau) #30-by-15
+			#x means q, q_dot, tau
+			dq_dotdx = np.hstack((Dqdq[0:15,:],Dtau[0:15,3:15]))
+			
+			dadq = Dqdq[15:30,0:15]/self.dt
+			dadq_dot = (Dqdq[15:30,15:30] - np.eye(15))/self.dt 
+			dadtau = Dtau[15:30,3:15]
+			dadx = np.hstack((dadq,dadq_dot,dadtau))
+
+			DynJac = np.hstack((dq_dotdx,dadx))
+			#now flip the axes
+			DynJac = self._own_to_diffne(J = DynJac)
+		if not continuous:
+			return a,DynJac
+		else:
+			if self.dyn == 'own':
+				return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
+			else:
+				self.q = qdqNext[0:15][np.newaxis].T
+				self.q_dot = qdqNext[15:30][np.newaxis].T
+				return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
 	def getDyn(self,x,u,continuous = False):
 		"""
@@ -192,15 +220,14 @@ class robosimianSimulator:
 		if self.dyn == 'own':
 			self.robot.set_q_2D_(q)
 			self.robot.set_q_dot_2D_(q_dot)
-			force,a = self.simulateOnce(u, continuous_simulation = continuous)
+			_,a = self.simulateOnce(u, continuous_simulation = continuous)
 		else:
 			qdq = x.tolist()
 			tau = [0,0,0] + u.tolist() #diffNE has control on all dofs
-			qdqNext,Dqdq,Dtau=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=True,Dtau=True)
+			qdqNext,_,_=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=False,Dtau=False)
 			a = (np.array(qdqNext[15:30]) - x[0:15])/self.dt
 			#flip the axes
 			a = self._own_to_diffne(q = a)
-
 
 		if not continuous:
 			return a
@@ -250,80 +277,80 @@ class robosimianSimulator:
 		"""
 		u: 1D np array
 		"""	
-		#debug:
-		loop_start_time = time.time()
-		##add viscious friction
-		if self.RL:
-			u_friction = []
-			for i in range(12):
-				u_friction.append(-configs.k_v*self.q_dot[i+3,0]**2)
-			u_friction = np.array(u_friction)
-		contacts,NofContacts,limb_indices = self.generateContacts()
-		if self.print_level == 1:
-			print('contacts',contacts)
-		A = np.zeros((self.Dwc,self.Dlambda))
 
-		b2 = np.zeros((4,1))
-		Jp = self.robot.compute_Jp(contact_list=limb_indices)
-		
-		#  accel = C + D*wc, where wc is contact wrench
-		if fixed:
-			C,D,L_prime,L_J = self.robot.compute_CD_fixed()
-		else:
+		if self.dyn == 'own':
+			#debug:
+			loop_start_time = time.time()
+			##add viscious friction
 			if self.RL:
-				C, D = self.robot.compute_CD(u+u_friction)
+				u_friction = []
+				for i in range(12):
+					u_friction.append(-configs.k_v*self.q_dot[i+3,0]**2)
+				u_friction = np.array(u_friction)
+			contacts,NofContacts,limb_indices = self.generateContacts()
+			if self.print_level == 1:
+				print('contacts',contacts)
+			A = np.zeros((self.Dwc,self.Dlambda))
 
-			else:
-				C, D = self.robot.compute_CD(u)
-		
-		if self.print_level == 1:
-			print('C:')
-			print(C)
-		if SA:
-			Q4s_all_limbs = []
-			######compute the wrench spaces serially #####
-			#SA
-			self.dhy[0:12,12:116] = np.zeros((12,104))
-
-
-		##### compute the wrench space of at 4 ankles in parallel using process ###
-		args = []
-		if NofContacts > 0:
-			for i in range(4):
-				if i <= NofContacts-1:
-					args.append([contacts[i],self.robot.ankle_length,True])
-				else:
-					args.append([0,0,False])
+			b2 = np.zeros((4,1))
+			Jp = self.robot.compute_Jp(contact_list=limb_indices)
 			
-			#compute_pool = MyPool(NofContacts)
-			res = self.compute_pool.starmap(self.terrain.feasibleWrenchSpace,args)
+			#  accel = C + D*wc, where wc is contact wrench
+			if fixed:
+				C,D,L_prime,L_J = self.robot.compute_CD_fixed()
+			else:
+				if self.RL:
+					C, D = self.robot.compute_CD(u+u_friction)
 
-			for i in range(NofContacts):
-				add_A = res[i][0]
-				Q4s = res[i][1]
-				A[contacts[i][3]*3:(contacts[i][3]+1)*3,contacts[i][3]*26:(contacts[i][3]+1)*26] = add_A
-				b2[contacts[i][3]] = 1
-				if SA:
-					self.dhy[contacts[i][3]*3:(contacts[i][3]+1)*3,contacts[i][3]*26+12:(contacts[i][3]+1)*26+12] = -add_A
-					Q4s_all_limbs.append(Q4s)
-
-
-		# for contact in contacts:
-		# 	add_A,Q4s = self.terrain.feasibleWrenchSpace(contact,self.robot.ankle_length,True)
-		# 	A[contact[3]*3:(contact[3]+1)*3,contact[3]*26:(contact[3]+1)*26] = add_A
-		# 	#SA
-		# 	if SA:
-		# 		self.dhy[contact[3]*3:(contact[3]+1)*3,contact[3]*26+12:(contact[3]+1)*26+12] = -add_A
-		# 		Q4s_all_limbs.append(Q4s)
-		# 	b2[contact[3]] = 1
+				else:
+					C, D = self.robot.compute_CD(u)
+			
+			if self.print_level == 1:
+				print('C:')
+				print(C)
+			if SA:
+				Q4s_all_limbs = []
+				######compute the wrench spaces serially #####
+				#SA
+				self.dhy[0:12,12:116] = np.zeros((12,104))
 
 
-		if self.print_level == 1:
-			print("wrench vertices from limb 1",A[0:3,0:26])
-			# print("active vertex",A[3:6,9+26])
-		if NofContacts > 0:
+			##### compute the wrench space of at 4 ankles in parallel using process ###
+			args = []
+			if NofContacts > 0:
+				for i in range(4):
+					if i <= NofContacts-1:
+						args.append([contacts[i],self.robot.ankle_length,True])
+					else:
+						args.append([0,0,False])
+				
+				#compute_pool = MyPool(NofContacts)
+				res = self.compute_pool.starmap(self.terrain.feasibleWrenchSpace,args)
 
-			if self.solver == 'cvxpy':
+				for i in range(NofContacts):
+					add_A = res[i][0]
+					Q4s = res[i][1]
+					A[contacts[i][3]*3:(contacts[i][3]+1)*3,contacts[i][3]*26:(contacts[i][3]+1)*26] = add_A
+					b2[contacts[i][3]] = 1
+					if SA:
+						self.dhy[contacts[i][3]*3:(contacts[i][3]+1)*3,contacts[i][3]*26+12:(contacts[i][3]+1)*26+12] = -add_A
+						Q4s_all_limbs.append(Q4s)
+
+
+			# for contact in contacts:
+			# 	add_A,Q4s = self.terrain.feasibleWrenchSpace(contact,self.robot.ankle_length,True)
+			# 	A[contact[3]*3:(contact[3]+1)*3,contact[3]*26:(contact[3]+1)*26] = add_A
+			# 	#SA
+			# 	if SA:
+			# 		self.dhy[contact[3]*3:(contact[3]+1)*3,contact[3]*26+12:(contact[3]+1)*26+12] = -add_A
+			# 		Q4s_all_limbs.append(Q4s)
+			# 	b2[contact[3]] = 1
+
+
+			if self.print_level == 1:
+				print("wrench vertices from limb 1",A[0:3,0:26])
+				# print("active vertex",A[3:6,9+26])
+			if NofContacts > 0:
 				self.C.value = C*self.dt + self.q_dot
 				self.D.value = np.multiply(D,self.dt)
 				self.M.value = self.robot.get_mass_matrix()
@@ -438,51 +465,55 @@ class robosimianSimulator:
 				if continuous_simulation:
 					self.q_dot = C*self.integrate_dt + self.q_dot+D@wc*self.integrate_dt
 
-		else:
-			#### uncomment this to have a continuous simulation....
-			if continuous_simulation:
-				self.q_dot = C*self.integrate_dt + self.q_dot
-			##TODO: Compute the Jocabian here
-			if SA:
-				dadx = self._contactFreeDynamics(C,D,u)
-				dx_dotdx = np.zeros((30,42))
-				dx_dotdx[0:15,15:30] = np.eye(15)
-				dx_dotdx[15:30,:] = dadx
-		#### uncomment this to have a continuous simulation....
-		
-		if continuous_simulation:
-			self.q = self.q_dot*self.integrate_dt+self.q
-			self.robot.set_q_2D_(self.q.ravel().tolist())
-			self.robot.set_q_dot_2D_(self.q_dot.ravel().tolist())
-			if self.print_level == 1:
-				print('current q:',self.q)
-
-			if self.RL:
-				self.q = self._check_q_bounds(self.q)
-				self.q_dot = self._check_q_dot_bounds(self.q_dot)
-
-			self.robot.set_q_2D(self.q)
-			self.robot.set_q_dot_2D(self.q_dot)
-
-		#################################################################
-		if fixed:
-			if NofContacts > 0:
-				return C+D@wc,fixed_joint_torques
 			else:
-				return C,[]
-
-		if not self.RL:
-			if NofContacts > 0:
+				#### uncomment this to have a continuous simulation....
+				if continuous_simulation:
+					self.q_dot = C*self.integrate_dt + self.q_dot
+				##TODO: Compute the Jocabian here
 				if SA:
-					return x_k,C+D@wc,dx_dotdx
-				else:
-					return x_k,C+D@wc
-			else:
-				pass
-		else:
-			##what do you return when you do RL?
-			return 
+					dadx = self._contactFreeDynamics(C,D,u)
+					dx_dotdx = np.zeros((30,42))
+					dx_dotdx[0:15,15:30] = np.eye(15)
+					dx_dotdx[15:30,:] = dadx
+			#### uncomment this to have a continuous simulation....
+			
+			if continuous_simulation:
+				self.q = self.q_dot*self.integrate_dt+self.q
+				self.robot.set_q_2D_(self.q.ravel().tolist())
+				self.robot.set_q_dot_2D_(self.q_dot.ravel().tolist())
+				if self.print_level == 1:
+					print('current q:',self.q)
 
+				if self.RL:
+					self.q = self._check_q_bounds(self.q)
+					self.q_dot = self._check_q_dot_bounds(self.q_dot)
+
+				self.robot.set_q_2D(self.q)
+				self.robot.set_q_dot_2D(self.q_dot)
+
+			#################################################################
+			if fixed:
+				if NofContacts > 0:
+					return C+D@wc,fixed_joint_torques
+				else:
+					return C,[]
+
+			if not self.RL:
+				if NofContacts > 0:
+					if SA:
+						return x_k,C+D@wc,dx_dotdx
+					else:
+						return x_k,C+D@wc
+				else:
+					pass
+			else:
+				##what do you return when you do RL?
+				return
+
+		elif self.dyn == 'diffne':
+			print("not implemented for diffne, use getDyn() instead")
+			return
+			
 	def simulate(self,total_time,plot = False, fixed = True,visualize = False):
 		world = self.robot.get_world()
 		if visualize:
