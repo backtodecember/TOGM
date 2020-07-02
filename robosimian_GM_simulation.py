@@ -134,8 +134,8 @@ class robosimianSimulator:
 
 			#create the simulator, use RK1F mode, force-level MDP
 			self.robot.create_simulator(accuracy=64,granular=True,mode = DNE.FORWARD_RK1F)     #this will use double
-			#self.robot.create_simulator(accuracy=128)    #this will use quadmath
-			#self.robot.create_simulator(accuracy=512)    #this will use MPFR
+			#self.robot.create_simulator(accuracy=128,granular=True,mode = DNE.FORWARD_RK1F)    #this will use quadmath
+			#self.robot.create_simulator(accuracy=512,granular=True,mode = DNE.FORWARD_RK1F)    #this will use MPFR
 
 			#set the floor
 			self.robot.set_floor([0,0,1,0],ees) # the list means Ax+By+Cz+D = 0. This basically sets a z = 0 plane.
@@ -156,7 +156,7 @@ class robosimianSimulator:
 		u is of dimension 12
 		Return:
 		---------------
-		a: np 1D array
+		a: np 2D array
 		DynJac: np array 30 x 42
 		if continuous, also return the state (np 1D array)
 		"""
@@ -169,6 +169,7 @@ class robosimianSimulator:
 			q = self._own_to_diffne(x[0:15])
 			q_dot = self._own_to_diffne(x[15:30])
 			u = -deepcopy(control)
+			qdq = q.tolist() + q_dot.tolist()
 
 		self.q = q[np.newaxis].T
 		self.q_dot = q_dot[np.newaxis].T
@@ -178,27 +179,29 @@ class robosimianSimulator:
 			self.robot.set_q_dot_2D_(q_dot)
 			_,a, DynJac = self.simulateOnce(u, continuous_simulation = continuous, SA = True)
 		else:
-			qdq = x.tolist()
 			tau = [0,0,0] + u.tolist() #diffNE has control on all dofs
 			qdqNext,Dqdq,Dtau=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=True,Dtau=True)
-			a = (np.array(qdqNext[15:30]) - x[0:15])/self.dt
+			a = (np.array(qdqNext[15:30]) - qdq[15:30])/self.dt
+			
 			#flip the axes back
 			a = self._own_to_diffne(q = a)
-
+			a = a[np.newaxis].T
 			#calcualte DynJac
 			Dqdq = np.array(Dqdq) #30-by-30
 			Dtau = np.array(Dtau) #30-by-15
 			#x means q, q_dot, tau
-			dq_dotdx = np.hstack((Dqdq[0:15,:],Dtau[0:15,3:15]))
-			
+			#dq_dotdx = np.hstack((Dqdq[15:30,:],Dtau[15:30,3:15]))
+			dq_dotdx = np.hstack((np.zeros((15,15)),np.eye(15),np.zeros((15,12))))
+
 			dadq = Dqdq[15:30,0:15]/self.dt
 			dadq_dot = (Dqdq[15:30,15:30] - np.eye(15))/self.dt 
-			dadtau = Dtau[15:30,3:15]
+			dadtau = Dtau[15:30,3:15]/self.dt
 			dadx = np.hstack((dadq,dadq_dot,dadtau))
 
-			DynJac = np.hstack((dq_dotdx,dadx))
+			DynJac = np.vstack((dq_dotdx,dadx))
 			#now flip the axes back
 			DynJac = self._own_to_diffne(J = DynJac)
+
 		if not continuous:
 			return a,DynJac
 		else:
@@ -209,6 +212,7 @@ class robosimianSimulator:
 				self.q_dot = qdqNext[15:30][np.newaxis].T
 				return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
+
 	def getDyn(self,x,control,continuous = False):
 		"""
 		Parameters:
@@ -217,7 +221,7 @@ class robosimianSimulator:
 		u is of dimension 12
 		Return:
 		---------------
-		a: np 1D array
+		a: np 2D array
 		if continuous, also return the state (np 1D array)
 		"""
 		#flip axis for diffne
@@ -229,6 +233,7 @@ class robosimianSimulator:
 			q = self._own_to_diffne(x[0:15])
 			q_dot = self._own_to_diffne(x[15:30])
 			u = -deepcopy(control)
+			qdq = q.tolist() + q_dot.tolist()
 
 		self.q = q[np.newaxis].T
 		self.q_dot = q_dot[np.newaxis].T
@@ -236,15 +241,18 @@ class robosimianSimulator:
 		if self.dyn == 'own':
 			self.robot.set_q_2D_(q)
 			self.robot.set_q_dot_2D_(q_dot)
-			_,a = self.simulateOnce(u, continuous_simulation = continuous)
+			force,a = self.simulateOnce(u, continuous_simulation = continuous)
+
 		else:
-			qdq = x.tolist()
+			
 			tau = [0,0,0] + u.tolist() #diffNE has control on all dofs
+
 			qdqNext,_,_=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=False,Dtau=False)
-			a = (np.array(qdqNext[15:30]) - x[0:15])/self.dt
+			a = (np.array(qdqNext[15:30]) - np.array(qdq)[15:30])/self.dt
+			
 			#flip the axes back
 			a = self._own_to_diffne(q = a)
-
+			a = a[np.newaxis].T
 		if not continuous:
 			return a
 		else:
@@ -295,7 +303,6 @@ class robosimianSimulator:
 		"""	
 
 		if self.dyn == 'own':
-			#debug:
 			loop_start_time = time.time()
 			##add viscious friction
 			if self.RL:
@@ -304,6 +311,8 @@ class robosimianSimulator:
 					u_friction.append(-configs.k_v*self.q_dot[i+3,0]**2)
 				u_friction = np.array(u_friction)
 			contacts,NofContacts,limb_indices = self.generateContacts()
+
+
 			if self.print_level == 1:
 				print('contacts',contacts)
 			A = np.zeros((self.Dwc,self.Dlambda))
@@ -849,21 +858,27 @@ class robosimianSimulator:
 		indeces = [1] + [3,4,5,6,7,8,9,10,11,12,13,14] #+ [16] + [18,19,20,21,22,23,24,25,26,27,28,29]
 		if q is not None:		
 			q_new = copy.deepcopy(q)
+			indeces = [1] + [3,4,5,6,7,8,9,10,11,12,13,14]
+			for i in indeces:
+				q_new[i] = -q_new[i]
+			return q_new
 		elif J is not None:
 			J_new = copy.deepcopy(J)
-		else:
-			raise RuntimeError('_own_to_diffne():wrong input for')
-		for i in indeces:
-			if q is not None:
-				q_new[i] = -q_new[i]
-			elif J is not None:
+
+			indeces_row =  [1] + [3,4,5,6,7,8,9,10,11,12,13,14] + [16] + [18,19,20,21,22,23,24,25,26,27,28,29]
+			for i in indeces_row:
+				#each column corresponds to each dof
+				J_new[i,:] = -J_new[i,:]
+
+			indeces_col =  [1] + [3,4,5,6,7,8,9,10,11,12,13,14] + [16] + [18,19,20,21,22,23,24,25,26,27,28,29] + [30,31,32,33,34,35,36,37,38,39,40,41]
+			for i in indeces_col:
 				#each column corresponds to each dof
 				J_new[:,i] = -J_new[:,i]
-
-		if q is not None:
-			return q_new
-		else:
+			
 			return J_new
+
+		else:
+			raise RuntimeError('_own_to_diffne():wrong input for')
 
 
 	def _set_DiffNE_q(self,q):
@@ -884,7 +899,6 @@ class robosimianSimulator:
 		for i in range(self.dof):
 			self.robot.qdq[i] = q[i,0]		
 		return
-
 	def _set_DiffNE_q_dot(self,q_dot):
 		"""
 		Parameters:
@@ -938,21 +952,32 @@ if __name__=="__main__":
 	
 	##### debug for dynjac
 	#q_2D = np.array(configs.q_test17)
-	q_2D = np.array([0.0,1.0,0.0]+[0.0]*12)
+	##q_2D = np.array([0.0,0.5,0.0]+[0.0,0.0,-0.8]+[0.0,0.0,0.8]+[0.0,0.0,-0.8]+[0.0,0.0,0.8])
+	q_2D = np.array([0,-0.7,0]+[math.pi*0.9/2,-math.pi/2,math.pi*1.1/2,-math.pi*0.9/2,math.pi/2,-math.pi*1.1/2,math.pi*0.9/2,
+		-math.pi/2,math.pi*1.1/2,-math.pi*0.9/2,math.pi/2,-math.pi*1.1/2])
+	q_2D = -q_2D
 	q_dot_2D = np.array([0.0]*15)
 	x = np.hstack((q_2D,q_dot_2D))
 	q_2D = q_2D[np.newaxis].T
 	q_dot_2D = q_dot_2D[np.newaxis].T
 
-	u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
-	5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
+
+
+	# u = np.array([6.08309021,0.81523653, 2.53641154 ,5.83534863 ,0.72158568, 2.59685143,\
+	# 5.50487329, 0.54710471,2.57836468, 5.75260704, 0.64075017, 2.51792186])
+	u = np.array([0.0]*12)
 	simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, dyn = 'own',print_level = 0,augmented = True,\
 		extrapolation = True,integrate_dt = 0.05)
-	a1 = simulator.getDyn(x,u)
+	simulator.debugSimulation()
+	a1,J1 = simulator.getDynJac(x,u)
 	
 	simulator2 = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.05, dyn = 'diffne',print_level = 0,augmented = True,\
 		extrapolation = True,integrate_dt = 0.05)
-	a2 = simulator2.getDyn(x,u)
 
+	start_time = time.time()
+	a2,J2 = simulator2.getDynJac(x,u)
+	print('time elapsed:',time.time() - start_time)
 	print('Own:',a1)
 	print('diffne:',a2)
+	print('Own:',J1[15:30,0:3])
+	print('diffne J:',J2[15:30,0:3])

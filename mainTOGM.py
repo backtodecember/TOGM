@@ -65,11 +65,11 @@ class Robosimian(System):
 	# 	#maybe convert J to coomatrix
 	# 	return a,J
 
+############################
+#Initialize the problem    #
+############################
 
 
-#These are the force and torque that could support the robot in place.
-# single_traj_guess = [0,0.915,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15
-# single_u_guess = configs.u_augmented_mosek
 
 
 sys = Robosimian()
@@ -79,8 +79,12 @@ t0 = 0.0
 tf = 0.05*(N-1)
 #This uses direct transcription
 problem = TrajOptProblem(sys,N,t0,tf,gradmode = True)
-# penetrationConstr = penetrationConstraint(30)
-# problem.add_constr(penetrationConstr,path = True)
+
+############################
+#Add state bounds          #
+############################
+
+
 
 
 #### different setttings start from here
@@ -232,7 +236,7 @@ class enoughTranslationCost(NonLinearObj):
 			if (xf-x0) >= self.d:
 				Gs = [0.0,0.0]
 			else:
-				Gs = [-self.C*(xf-x0-0.4),self.C*(xf-x0-0.4)]
+				Gs = [-self.C*2.0*(xf-x0-0.4),self.C*2.0*(xf-x0-0.4)]
 			G[:] = Gs
 			if rec:
 				row[:] = [0,0]
@@ -313,6 +317,12 @@ class transportationCost(NonLinearObj):
 				row[:] = [0]*len(nonzeros)
 				col[:] = nonzeros
 
+
+##############################
+#set the problem constraints #
+##############################
+
+
 #####Original setting
 # R = np.array([1.0]*12)
 # cost = LqrObj(R = R)#,ubase = np.array(single_u_guess))
@@ -351,7 +361,7 @@ class transportationCost(NonLinearObj):
 c1 = transportationCost()
 c2 = enoughTranslationCost()
 constr1 = anklePoseConstr()
-problem.addNonLinearObj(c1)
+#problem.addNonLinearObj(c1)
 problem.addNonLinearObj(c2)
 problem.addNonLinearPointConstr(constr1,path = True)
 
@@ -377,7 +387,7 @@ print('preProcess took:',time.time() - startTime)
 #print_level 1 for SNOPT is verbose enough
 #print_level 0-12 for IPOPT 5 is appropriate, 6 more detailed
 # cfg = OptConfig(backend='snopt', print_file='temp_files/tmp.out', print_level = 1, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,iter_limit = 10000000)
-# cfg = OptConfig(backend='ipopt', print_file='temp_files/tmp.out', print_level = 5, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 5,deriv_check = True)
+# cfg = OptConfig(backend='ipopt', print_file='temp_files/tmp.out', print_level = 5, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 2,deriv_check = True)
 # slv = OptSolver(problem, cfg)
 #setting 12
 #slv.solver.setWorkspace(4000000,5000000)
@@ -390,19 +400,21 @@ print('preProcess took:',time.time() - startTime)
 ##1015 is the output level 1003 is the algorithm 
 ##1022 is the feastol_relative 1027 is opttol
 ##1006 is KN_PARAM_BAR_FEASIBLE
-##1097 KN_PARAM_INITPENALTY
+##1097 KN_PARAM_INITPENALTY, 1080 derivative check, 1082 derivative check tolerence
 ##1049 adopt flexible penalty parameter in the merit function to weight feasibility vs optimality
 ##debug information 1032
-# options = {'1014':10,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':0,'1097':500.0,'1049':1,'1031':1,'history':True}
-# cfg = OptConfig(backend = 'knitro', **options)
-# slv = OptSolver(problem, cfg)
+options = {'1014':10,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':0,'1097':500.0,'1049':1,'1031':1,'1080':1,'1082':1e-4,'history':True}
+cfg = OptConfig(backend = 'knitro', **options)
+slv = OptSolver(problem, cfg)
 
 
 ###############################
 ##Initial Guess              ##
 ###############################
 
-
+#These are the force and torque that could support the robot in place.
+# single_traj_guess = [0,0.915,0,-0.9708,0,-0.6,2.1708,0,-0.6,-0.9708,0,-0.6,2.1708,0,-0.6]+[0.0]*15
+# single_u_guess = configs.u_augmented_mosek
 ###setting 1-13
 # traj_guess = []
 # u_guess = []
@@ -434,8 +446,8 @@ guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)#,ob
 ###save initial guess        ##
 ###############################
 
-init_flag = False
-if init_flag:
+save_flag = False
+if save_flag:
 	parsed_result = problem.parse_f(guess)
 	for key, value in parsed_result.items() :
 		print(key,value,np.shape(value))
@@ -446,13 +458,15 @@ if init_flag:
 	np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
 
 
-
+###############################
+###save solutions            ##
+###############################
 startTime = time.time()
 
 ### setting for using SNOPT
-# iteration = 55
-# rst = slv.solve_guess(guess)
-# sol = problem.parse_sol(rst.sol.copy())
+iteration = 5
+rst = slv.solve_guess(guess)
+sol = problem.parse_sol(rst.sol.copy())
 # np.save('temp_files/solution_u'+str(iteration),sol['u'])
 # np.save('temp_files/solution_x'+str(iteration),sol['x'])
 # print(str(iteration)+ 'iterations completed')
@@ -466,24 +480,24 @@ startTime = time.time()
 
 
 ##setting for using Knitro
-rst = slv.solve_guess(guess)
-i = 0
-for history in rst.history:
-	sol = problem.parse_sol(history['x'])
-	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
-	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
+# rst = slv.solve_guess(guess)
+# i = 0
+# for history in rst.history:
+# 	sol = problem.parse_sol(history['x'])
+# 	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
+# 	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
 
-	### This saves everything from the optimizer
-	np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
-	np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
+# 	### This saves everything from the optimizer
+# 	np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
+# 	np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
 
-	### 
-	# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
-	# parsed_result = problem.parse_f(result_0)
-	# np.save('temp_files/solverlib_obj.npy',np.array(parsed_result['obj']))
-	# np.save('temp_files/solverlib_con.npy',parsed_result['path'][0])
+# 	### 
+# 	# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
+# 	# parsed_result = problem.parse_f(result_0)
+# 	# np.save('temp_files/solverlib_obj.npy',np.array(parsed_result['obj']))
+# 	# np.save('temp_files/solverlib_con.npy',parsed_result['path'][0])
 	
-	i += 1
+# 	i += 1
 
 
 print('Took', time.time() - startTime)
