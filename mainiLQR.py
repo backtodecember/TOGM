@@ -16,6 +16,22 @@ class robosimianDyn(Dynamics):
         self.current_J = np.zeros((self._state_size,self._state_size + self._action_size))
         super(Dynamics,self).__init__()
 
+    @property
+    def state_size(self):
+        """State size."""
+        return self._state_size
+
+    @property
+    def action_size(self):
+        """Action size."""
+        return self._action_size
+
+    @property
+    def has_hessians(self):
+        """Whether the second order derivatives are available."""
+        return self._has_hessians
+
+
     def f(self,x,u,i):
         # if np.linalg,norm(self.current_x)
 
@@ -39,6 +55,6 @@ class robosimianDyn(Dynamics):
         return
 
 if __name__ == "__main__":
-    robosimianDyn = robosimianDyn()
+    robosimianDyn = robosimianDyn(dt = 0.01)
     robosimianDyn.f([],[],[])
     robosimianDyn.f_x([],[],[])
