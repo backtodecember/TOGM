@@ -1,7 +1,12 @@
 from robosimian_GM_simulation import robosimianSimulator
 from ilqr import iLQR
 from ilqr.dynamics import Dynamics
+from ilqr.cost import Cost, AutoDiffCost, QRCost
+import theano.tensor as T
+
 import numpy as np
+from KlamptDiffNE import *
+import pyDiffNE
 
 class robosimianDyn(Dynamics):
     def __init__(self,dt):
@@ -11,9 +16,17 @@ class robosimianDyn(Dynamics):
         self._has_hessians = False
 
         self.compare_eps = 1e-7
-        self.current_x = np.zeros(self._state_size)
-        self.current_u = np.zeros(self._action_size)
+        self.current_x = np.random.rand(self._state_size)
+        self.current_u = np.random.rand(self._action_size)
         self.current_J = np.zeros((self._state_size,self._state_size + self._action_size))
+
+        #initialize robot
+        q_2D = np.array([0.0,1.02,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
+            +[0.6+1.5708,0.0,-0.6])[np.newaxis].T
+        q_dot_2D = np.array([0.0]*15)[np.newaxis].T
+
+        #Test 14+ should have extraploation set to be True
+        self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = self.dt,dyn = 'diffne', augmented = True, extrapolation = True, integrate_dt = self.dt)
         super(Dynamics,self).__init__()
 
     @property
@@ -31,17 +44,29 @@ class robosimianDyn(Dynamics):
         """Whether the second order derivatives are available."""
         return self._has_hessians
 
-
+    ##f is used in forward pass, while f_x, and f_u are used in backward pass
     def f(self,x,u,i):
-        # if np.linalg,norm(self.current_x)
-
-
-        return
+        _,x_next = self.robot.getDyn(x,u,continuous=True) 
+        return x_next
 
     def f_x(self,x,u,i):
+        if (np.linalg.norm(self.current_x - x) < self.compare_eps) and (np.linalg.norm(self.current_u - u) < self.compare_eps):
+            return self.current_J[:,0:self._state_size]
+        else:
+            _,self.current_J = self.robot.getDynJac(x,u)
+            self.current_x = x
+            self.current_u = u
+            return self.current_J[:,0:self._state_size]
         return
 
     def f_u(self,x,u,i):
+        if (np.linalg.norm(self.current_x - x) < self.compare_eps) and (np.linalg.norm(self.current_u - u) < self.compare_eps):
+            return self.current_J[:,self._state_size:self._action_size + self._state_size]
+        else:
+            _,self.current_J = self.robot.getDynJac(x,u)
+            self.current_x = x
+            self.current_u = u
+            return self.current_J[:,self._state_size:self._action_size + self._state_size]
         return
 
     #these would not be implemented
@@ -54,7 +79,25 @@ class robosimianDyn(Dynamics):
     def f_uu(self,x,u,i):
         return
 
+class robosimianCost(AutoDiffCost):
+    def __init__(self,N):
+        self.N = self.N
+
 if __name__ == "__main__":
+    #LQR setup
     robosimianDyn = robosimianDyn(dt = 0.01)
-    robosimianDyn.f([],[],[])
-    robosimianDyn.f_x([],[],[])
+    Q = np.zeros((30,30))
+    Q[15,15] = 2.0 #torso speed
+    Q[1,1] = 1.0 #torso height
+    x_goal = np.zeros(30)
+    x_goal[15] = 0.3
+    x_goal[1] = 0.9 
+    R = np.zeros((12,12))
+    cost = QRCost(Q = Q,R = R, x_goal = x_goal)
+
+    #initial guess and other setup
+    N = 1000 #10s with dt = 0.01
+    x0 = 
+    u0 = 
+    #callback function
+    def on_iteration(iteration_count, xs, us, J_opt, accepted, converged):
