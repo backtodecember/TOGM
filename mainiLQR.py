@@ -95,9 +95,13 @@ if __name__ == "__main__":
     R = np.zeros((12,12))
     cost = QRCost(Q = Q,R = R, x_goal = x_goal)
 
+    x = np.load('results/PID_trajectory/4/q_history.npy')[0]
+    u = np.load('results/PID_trajectory/4/u_history.npy')
+    print(np.shape(x),np.shape(u))
     #initial guess and other setup
-    N = 1000 #10s with dt = 0.01
-    x0 = 
-    u0 = 
+    N = 2000 #10s with dt = 0.01
+    x0 = np.concatenate((np.load('results/PID_trajectory/4/q_history.npy')[1],np.load('results/PID_trajectory/4/q_dot_history.npy')[1]))
+    u0 = np.load('results/PID_trajectory/4/u_history.npy')[1:2001]
+
     #callback function
     def on_iteration(iteration_count, xs, us, J_opt, accepted, converged):
