@@ -7,7 +7,7 @@ import theano.tensor as T
 import numpy as np
 from KlamptDiffNE import *
 import pyDiffNE
-
+import time
 class robosimianDyn(Dynamics):
     def __init__(self,dt):
         self.dt = dt
@@ -86,22 +86,33 @@ class robosimianCost(AutoDiffCost):
 if __name__ == "__main__":
     #LQR setup
     robosimianDyn = robosimianDyn(dt = 0.01)
-    Q = np.zeros((30,30))
+    Q = np.zeros((30,30)) 
     Q[15,15] = 2.0 #torso speed
     Q[1,1] = 1.0 #torso height
     x_goal = np.zeros(30)
     x_goal[15] = 0.3
     x_goal[1] = 0.9 
-    R = np.zeros((12,12))
+    R = np.eye(12,12)*0.01 #regularize the control a little bit
     cost = QRCost(Q = Q,R = R, x_goal = x_goal)
 
-    x = np.load('results/PID_trajectory/4/q_history.npy')[0]
-    u = np.load('results/PID_trajectory/4/u_history.npy')
-    print(np.shape(x),np.shape(u))
     #initial guess and other setup
-    N = 2000 #10s with dt = 0.01
+    N = 2000 #10s with dt = 0.005
     x0 = np.concatenate((np.load('results/PID_trajectory/4/q_history.npy')[1],np.load('results/PID_trajectory/4/q_dot_history.npy')[1]))
-    u0 = np.load('results/PID_trajectory/4/u_history.npy')[1:2001]
-
+    u0 = np.load('results/PID_trajectory/4/u_history.npy')[1:2001] #N*action_size
+    ilqr = iLQR(robosimianDyn,cost,N)
     #callback function
+    J_hist = []
     def on_iteration(iteration_count, xs, us, J_opt, accepted, converged):
+        J_hist.append(J_opt)
+        info = "converged" if converged else ("accepted" if accepted else "failed")
+        print("iteration", iteration_count, info, J_opt, xs[-1][0])
+
+    #start calculating
+    start_time = time.time()
+    total_iter = 500
+    xs, us = ilqr.fit(x0,u0,n_iterations = total_iter,on_iteration = on_iteration)
+    print('========================')
+    print('Took',time.time() - start_time)
+
+    np.save('temp_files/solution_x'+str(total_iter)+'.npy',xs)
+    np.save('temp_files/solution_u'+str(total_iter)+'.npy',us)
