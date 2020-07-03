@@ -21,7 +21,7 @@ import multiprocessing as mp
 #Zherong's package
 from KlamptDiffNE import *
 import pyDiffNE
-import pickle,copy
+import pickle
 
 
 class robosimianSimulator:
@@ -208,8 +208,8 @@ class robosimianSimulator:
 			if self.dyn == 'own':
 				return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 			else:
-				self.q = qdqNext[0:15][np.newaxis].T
-				self.q_dot = qdqNext[15:30][np.newaxis].T
+				self.q = self._own_to_diffne(q = np.array(qdqNext[0:15]))[np.newaxis].T
+				self.q_dot = self._own_to_diffne(q = np.array(qdqNext[15:30]))[np.newaxis].T
 				return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
 
@@ -259,8 +259,8 @@ class robosimianSimulator:
 			if self.dyn == 'own':
 				return a,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 			else:
-				self.q = qdqNext[0:15][np.newaxis].T
-				self.q_dot = qdqNext[15:30][np.newaxis].T
+				self.q = self._own_to_diffne(q = np.array(qdqNext[0:15]))[np.newaxis].T
+				self.q_dot = self._own_to_diffne(q = np.array(qdqNext[15:30]))[np.newaxis].T
 				return a,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
 	def getStaticTorques(self,x):
@@ -536,7 +536,25 @@ class robosimianSimulator:
 				return
 
 		elif self.dyn == 'diffne':
-			print("not implemented for diffne, use getDyn() instead")
+
+			q = self._own_to_diffne(q = self.q.ravel())
+			q_dot = self._own_to_diffne(q = self.q_dot.ravel())
+			u1 = -deepcopy(u)
+			qdq = q.tolist() + q_dot.tolist()
+			tau = [0,0,0] + u1.tolist() #diffNE has control on all dofs
+
+			qdqNext,_,_=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=False,Dtau=False)
+			# a = (np.array(qdqNext[15:30]) - np.array(qdq)[15:30])/self.dt
+			# #flip the axes back
+			# a = self._own_to_diffne(q = a)
+			# a = a[np.newaxis].T
+			if not continuous_simulation:
+				return 
+			else:
+				self.q = self._own_to_diffne(q = np.array(qdqNext[0:15]))[np.newaxis].T
+				self.q_dot = self._own_to_diffne(q = np.array(qdqNext[15:30]))[np.newaxis].T
+				return
+
 			return
 			
 	def simulate(self,total_time,plot = False, fixed = True,visualize = False):
@@ -857,13 +875,13 @@ class robosimianSimulator:
 		"""
 		indeces = [1] + [3,4,5,6,7,8,9,10,11,12,13,14] #+ [16] + [18,19,20,21,22,23,24,25,26,27,28,29]
 		if q is not None:		
-			q_new = copy.deepcopy(q)
+			q_new = deepcopy(q)
 			indeces = [1] + [3,4,5,6,7,8,9,10,11,12,13,14]
 			for i in indeces:
 				q_new[i] = -q_new[i]
 			return q_new
 		elif J is not None:
-			J_new = copy.deepcopy(J)
+			J_new = deepcopy(J)
 
 			indeces_row =  [1] + [3,4,5,6,7,8,9,10,11,12,13,14] + [16] + [18,19,20,21,22,23,24,25,26,27,28,29]
 			for i in indeces_row:
