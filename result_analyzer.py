@@ -13,6 +13,7 @@ from klampt.math import vectorops as vo
 import time
 import matplotlib.pyplot as plt
 import math
+from robosimian_wrapper import robosimian
 class analyzer:
 	def __init__(self,case = '11-2',dt = 0.005,method = "Euler",x_data = [],u_data = []):
 		self.dt = dt
@@ -323,10 +324,10 @@ class PIDTracker:
 		"""
 		self.visualization = visualization
 		self.initial = initial
-		self.dt = 0.005 #this is the default PID dt
+		self.dt = 0.05 #this is the default PID dt
 		q0 = np.array(configs.q_staggered_augmented)[np.newaxis].T
 		q_dot0 = np.zeros((15,1))
-		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = self.dt, solver = 'cvxpy', augmented = True, extrapolation= True)
+		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = self.dt, dyn = 'diffne', augmented = True, extrapolation= True)
 		self.case = case
 		if x_data != []:
 			self.x = x_data
@@ -336,9 +337,15 @@ class PIDTracker:
 			self.x = np.load('results/'+case+'/solution_x.npy')
 
 
-		self.kp = np.array([1000.0,1000.0,1000.0]*4)
-		self.ki = np.array([2.0]*12)
-		self.kd = np.array([10.0,8.0,10.0]*4)
+		# self.kp = np.array([1000.0,1000.0,1000.0]*4)
+		# self.ki = np.array([2.0]*12)
+		# self.kd = np.array([10.0,8.0,10.0]*4)
+
+		#these are used for diffne test 20 run2
+		self.kp = np.array([10.0,10.0,10.0]*4)
+		self.ki = np.array([0.0]*12)
+		self.kd = np.array([1.0,0.8,1.0]*4)
+
 
 		(self.N,_) = np.shape(self.x)
 		self.iterations = np.arange(self.N)
@@ -351,8 +358,16 @@ class PIDTracker:
 		#self.vis_dt = 0.005*40
 		self.force_scale = 0.001 #200N would be 0.2m
 
-		self.world = self.robot.getWorld()
+
+		#add vis world
+		self.vis_robot = robosimian()
+		self.world = self.vis_robot.get_world()
+		self.vis_robot.set_q_2D_(self.x[0,0:15])
+
 		vis.add("world",self.world)
+		vis.show()
+		vis.addText('time','time: '+str(0))
+
 
 	def run(self):
 		self.ankle_position_list = []
@@ -368,7 +383,7 @@ class PIDTracker:
 		error = np.array([0.0]*12)
 		last_error = np.array([0.0]*12)
 		accumulated_error = np.array([0.0]*12)
-		time.sleep(15.0)
+		time.sleep(1.0)
 		simulation_time = 0.0
 		#start_time = time.time()
 
@@ -386,11 +401,14 @@ class PIDTracker:
 				#simulation_time = time.time() - start_time
 				current_q = self.robot.getConfig()[3:15] #1d array of 15 elements
 				desired_q = np.array(self._targetQ(simulation_time))
+
+				##add ghost
 				ghost_q = self.robot.getConfig()[0:3].tolist() + self._targetQ(simulation_time)
-				full_ghost_q = self.robot.robot.q_2D_to_3D_(ghost_q)
-				#print(full_ghost_q)
-				vis.add('ghost',self.robot.robot.q_2D_to_3D_(ghost_q))
+				#full_ghost_q = self.robot.q_2D_to_3D_(ghost_q)
+				vis.add('ghost',self.robot.q_2D_to_3D_(ghost_q))
 				vis.setColor('ghost',0,1,0,0.3)
+
+
 				last_error = deepcopy(error)
 				error = desired_q - current_q
 				dError = (error - last_error)/self.dt
@@ -417,18 +435,29 @@ class PIDTracker:
 				simulation_time += self.dt
 				vis.addText('time','time: '+str(simulation_time))
 
-				force,a = self.robot.simulateOnce(tau,continuous_simulation = True)
-				ankle_positions = self.robot.robot.get_ankle_positions(full = True)
-				for i in range(4):
-					force_vector = vo.mul(force[0+i*3:2+i*3],self.force_scale)
-					limb_force = trajectory.Trajectory(times = [0,1],milestones = [vo.add(ankle_positions[i][0:3],[0,-0.1,0]),\
-						vo.add(vo.add(ankle_positions[i][0:3],[force_vector[0],0,force_vector[1]]),[0,-0.1,0])])
-					vis.add('force'+str(i+1),limb_force)
+
+				#### if using own dynamics, then adding force is fine
+				self.robot.simulateOnce(tau,continuous_simulation = True)
+
+				#do this for own dynamics
+				#force,a = self.robot.simulateOnce(tau,continuous_simulation = True)
+				#ankle_positions = self.robot.robot.get_ankle_positions(full = True)
+				# for i in range(4):
+				# 	force_vector = vo.mul(force[0+i*3:2+i*3],self.force_scale)
+				# 	limb_force = trajectory.Trajectory(times = [0,1],milestones = [vo.add(ankle_positions[i][0:3],[0,-0.1,0]),\
+				# 		vo.add(vo.add(ankle_positions[i][0:3],[force_vector[0],0,force_vector[1]]),[0,-0.1,0])])
+				# 	vis.add('force'+str(i+1),limb_force)
 				
 				# self.force_list.append(force)
 				# self.ankle_position_list.append(ankle_positions)
+
+
+
+				#update vis robot
+				self.vis_robot.set_q_2D_(self.robot.getConfig())
+
 				vis.unlock()
-				time.sleep(0.001)
+				time.sleep(0.05)
 			while vis.shown():
 				time.sleep(0.1)
 			vis.kill()
@@ -516,18 +545,18 @@ if __name__=="__main__":
 	# print(traj_guess[-1,0])
 
 	##### code to evaluate an optimized trajectory
-	iteration = 11
-	traj = np.load('results/19/run2/solution_x'+str(iteration) +'.npy')
-	u = np.load('results/19/run2/solution_u'+str(iteration)+'.npy')
+	# iteration = 11
+	# traj = np.load('results/19/run2/solution_x'+str(iteration) +'.npy')
+	# u = np.load('results/19/run2/solution_u'+str(iteration)+'.npy')
 
-	# traj = np.load('temp_files/solution_x10.npy')
-	# u = np.load('temp_files/solution_u10.npy')
-	# traj = np.load('results/17/solution_x'+str(iteration) +'.npy')
-	# u = np.load('results/17/solution_u'+str(iteration)+'.npy')
+	# # traj = np.load('temp_files/solution_x10.npy')
+	# # u = np.load('temp_files/solution_u10.npy')
+	# # traj = np.load('results/17/solution_x'+str(iteration) +'.npy')
+	# # u = np.load('results/17/solution_u'+str(iteration)+'.npy')
 
-	analyzer = analyzer('19',dt = 0.05,method = "Euler",x_data = traj, u_data = u)
-	analyzer.calculation()
-	analyzer.animate() #animate the trajectory
+	# analyzer = analyzer('19',dt = 0.05,method = "Euler",x_data = traj, u_data = u)
+	# analyzer.calculation()
+	# analyzer.animate() #animate the trajectory
 	# print('objective is',analyzer.objective(traj,u_))
 	# print('initial torso x:',traj[0,0])
 	# print('final torso x:',traj[-1,0])
@@ -583,3 +612,8 @@ if __name__=="__main__":
 	# print(traj_guess[0,0])
 	# print(traj_guess[-1,0])
 
+
+	traj_guess = np.hstack((np.load('results/PID_trajectory/4/q_init_guess.npy'),np.load('results/PID_trajectory/4/q_dot_init_guess.npy')))
+	u = np.load('results/PID_trajectory/4/u_init_guess.npy')
+	tracker = PIDTracker('20',True,traj_dt=0.05,x_data = traj_guess,u_data = u, initial =False)
+	tracker.run()

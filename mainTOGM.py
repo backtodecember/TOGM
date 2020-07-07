@@ -218,7 +218,7 @@ class enoughTranslationCost(NonLinearObj):
 		self.nU = 12
 		self.nP = 0
 		self.d = 0.4
-		self.C = 100.0
+		self.C = 1.0#100.0
 		global N
 		self.N = N
 		NonLinearObj.__init__(self,nsol = self.N*(self.nX+self.nU+self.nP),nG = 2  )
@@ -243,6 +243,7 @@ class enoughTranslationCost(NonLinearObj):
 				col[:] = col_entries
 
 
+
 class transportationCost(NonLinearObj):
 	def __init__(self):
 		self.nX = 30
@@ -257,7 +258,7 @@ class transportationCost(NonLinearObj):
 		#setting 16 - 18
 		#self.scale = 100.0
 		#setting 17 run 3
-		self.scale = 500.0
+		self.scale = 5000.0 # 500.0
 		#TODO, need to modify the gradient for adding small_C
 		self.small_C = 0.01
 	def __callg__(self,x, F, G, row, col, rec, needg):
@@ -318,6 +319,40 @@ class transportationCost(NonLinearObj):
 				col[:] = nonzeros
 
 
+#target velocity
+Q = np.zeros(30)
+Q[1] = 0.1
+Q[15] = 10.0
+xbase = np.zeros(30)
+xbase[1] = 0.9
+xbase[15] = 0.2
+targetVelocityCost = LqrObj(Q = Q, xbase = xbase)
+
+#periodic cost
+# class periodicCost(LinearObj):
+# 	def __init__(self):
+# 		global N
+# 		dmin = 0.3
+# 		dmax = 1.0
+# 		nX = 30
+# 		nU = 12
+# 		nP = 0
+# 		A = np.zeros((nX,N*(nX+nU+nP)))
+# 		lb = np.zeros(nX)
+# 		ub = np.zeros(nX)
+# 		#enough x translation
+# 		A[0,0] = -1.0
+# 		A[0,0+(N-1)*(nX+nU+nP)] = 1.0
+# 		lb[0] = dmin
+# 		ub[0] = dmax
+# 		#Remain same for the other state dimensions
+# 		for i in range(nX):
+# 			if i > 0:
+# 				A[i,i] = 1.0
+# 				A[i,i+(N-1)*(nX+nU+nP)] = -1.0
+# 		LinearConstr.__init__(self,A,lb = lb,ub = ub)
+
+
 ##############################
 #set the problem constraints #
 ##############################
@@ -357,15 +392,18 @@ class transportationCost(NonLinearObj):
 # constr2 = positiveTranslationConstr()
 # problem.addLinearConstr(constr2)
 
-#setting 19
-c1 = transportationCost()
-c2 = enoughTranslationCost()
+#setting 19,20
+# c1 = transportationCost()
+# c2 = enoughTranslationCost()
+# constr1 = anklePoseConstr()
+# problem.addNonLinearObj(c1)
+# problem.addNonLinearObj(c2)
+# problem.addNonLinearPointConstr(constr1,path = True)
+
+#setting 21
 constr1 = anklePoseConstr()
-#problem.addNonLinearObj(c1)
-problem.addNonLinearObj(c2)
+problem.add_lqr_obj(targetVelocityCost)
 problem.addNonLinearPointConstr(constr1,path = True)
-
-
 ############################
 #preprocess                #
 ############################
@@ -375,7 +413,7 @@ startTime = time.time()
 #setting before 19
 # problem.preProcess()
 #setting 19
-problem.pre_process(dyn_tol = 0.005,snopt_mode = False)
+problem.pre_process(dyn_tol = 0.0001,snopt_mode = False)
 print('preProcess took:',time.time() - startTime)
 
 
@@ -399,11 +437,11 @@ print('preProcess took:',time.time() - startTime)
 ##1014 maxIter,1023 is featol_abs  1027 opttol 1016 is the output mode; 1033 is whether to use multistart
 ##1015 is the output level 1003 is the algorithm 
 ##1022 is the feastol_relative 1027 is opttol
-##1006 is KN_PARAM_BAR_FEASIBLE
-##1097 KN_PARAM_INITPENALTY, 1080 derivative check, 1082 derivative check tolerence
-##1049 adopt flexible penalty parameter in the merit function to weight feasibility vs optimality
+##1006 is KN_PARAM_BAR_FEASIBLE 0 vs 3
+##1097 KN_PARAM_INITPENALTY (default 1), 1080 derivative check, 1082 derivative check tolerence
+##1049 adopt flexible penalty parameter in the merit function to weight feasibility vs optimality: 1:use a single parameter 2:flexible
 ##debug information 1032
-options = {'1014':10,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':0,'1097':500.0,'1049':1,'1031':1,'1080':1,'1082':1e-4,'history':True}
+options = {'1014':2000,'1023':1e-4,'1016':2,'1033':0,'1003':0,'1022':1e-4,'1027':1e-4,'1006':3,'1097':1.0,'1049':1,'1080':0,'1082':1e-4,'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
 
@@ -426,17 +464,22 @@ slv = OptSolver(problem, cfg)
 #guess = problem.genGuessFromTraj(X= np.array(traj_guess), U=np.array(u_guess), t0 = 0, tf = tf)
 
 ###setting 14,15,16,18
-# traj_guess = np.hstack((np.load('results/PID_trajectory/2/q_init_guess.npy'),np.load('results/PID_trajectory/2/q_dot_init_guess.npy')))
-# u_guess = np.load('results/PID_trajectory/2/u_init_guess.npy')
+traj_guess = np.hstack((np.load('results/PID_trajectory/4/q_init_guess.npy'),np.load('results/PID_trajectory/4/q_dot_init_guess.npy')))
+u_guess = np.load('results/PID_trajectory/4/u_init_guess.npy')
 # # traj_guess = np.load('results/16/run1/solution_x61.npy')
 # # u_guess = np.load('results/16/run1/solution_u61.npy')
 # guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 #setting 17,19
-traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
-u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
+# traj_guess = np.load('results/PID_trajectory/4/x_init_guess.npy')
+# u_guess = np.load('results/PID_trajectory/4/u_init_guess.npy')
+
 # traj_guess = np.load('results/19/run2/solution_x11.npy')
 # u_guess = np.load('results/19/run2/solution_u11.npy')
+
+
+# traj_guess = np.load('results/20/run3/solution_x100.npy')
+# u_guess = np.load('results/20/run3/solution_u100.npy')
 guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)#,obj = [0,16.0])
 
 
@@ -446,16 +489,16 @@ guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)#,ob
 ###save initial guess        ##
 ###############################
 
-save_flag = False
+save_flag =True
 if save_flag:
 	parsed_result = problem.parse_f(guess)
 	for key, value in parsed_result.items() :
 		print(key,value,np.shape(value))
 
-	np.save('temp_files/knitro_obj0.npy',np.array([0.0]))
+	np.save('temp_files2/knitro_obj0.npy',np.array([0.0]))
 	dyn_constr = np.array(parsed_result['dyn']).flatten()
 	ankle_constr = parsed_result['path'][0].flatten()
-	np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
+	np.save('temp_files2/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
 
 
 ###############################
@@ -464,9 +507,9 @@ if save_flag:
 startTime = time.time()
 
 ### setting for using SNOPT
-iteration = 5
-rst = slv.solve_guess(guess)
-sol = problem.parse_sol(rst.sol.copy())
+# iteration = 5
+# rst = slv.solve_guess(guess)
+# sol = problem.parse_sol(rst.sol.copy())
 # np.save('temp_files/solution_u'+str(iteration),sol['u'])
 # np.save('temp_files/solution_x'+str(iteration),sol['x'])
 # print(str(iteration)+ 'iterations completed')
@@ -480,24 +523,24 @@ sol = problem.parse_sol(rst.sol.copy())
 
 
 ##setting for using Knitro
-# rst = slv.solve_guess(guess)
-# i = 0
-# for history in rst.history:
-# 	sol = problem.parse_sol(history['x'])
-# 	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
-# 	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
+rst = slv.solve_guess(guess)
+i = 0
+for history in rst.history:
+	sol = problem.parse_sol(history['x'])
+	np.save('temp_files2/solution_u'+str(i+1)+'.npy',sol['u'])
+	np.save('temp_files2/solution_x'+str(i+1)+'.npy',sol['x'])
 
-# 	### This saves everything from the optimizer
-# 	np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
-# 	np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
+	### This saves everything from the optimizer
+	np.save('temp_files2/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
+	np.save('temp_files2/knitro_con'+str(i+1)+'.npy',history['con'])
 
-# 	### 
-# 	# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
-# 	# parsed_result = problem.parse_f(result_0)
-# 	# np.save('temp_files/solverlib_obj.npy',np.array(parsed_result['obj']))
-# 	# np.save('temp_files/solverlib_con.npy',parsed_result['path'][0])
+	### 
+	# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
+	# parsed_result = problem.parse_f(result_0)
+	# np.save('temp_files/solverlib_obj.npy',np.array(parsed_result['obj']))
+	# np.save('temp_files/solverlib_con.npy',parsed_result['path'][0])
 	
-# 	i += 1
+	i += 1
 
 
 print('Took', time.time() - startTime)

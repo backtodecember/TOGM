@@ -1,7 +1,8 @@
 from klampt.io import loader
-from klampt import vis
+from klampt import vis,WorldModel
 from robosimian_GM_simulation import robosimianSimulator
 from copy import copy,deepcopy
+from robosimian_wrapper import robosimian
 import time
 import numpy as np
 
@@ -13,18 +14,18 @@ trajectory = loader.loadTrajectory('data/trotting_gait')
 total_time = trajectory.endTime()
 
 q_2D = trajectory.eval(0.0)
-q_2D[0:3] = [0,0.90,0]
+q_2D[0:3] = [0,0.92,0]
 q_desried_0 = deepcopy(q_2D[3:15])
 q_2D = np.array(q_2D)[np.newaxis].T
 q_dot_2D = np.array([0.0]*15)[np.newaxis].T
-simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = 0.005, solver = 'cvxpy',print_level = 0,augmented = True,extrapolation = True, integrate_dt = dt)
+simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = dt, dyn = 'diffne',print_level = 0,augmented = True,extrapolation = True, integrate_dt = dt)
 
 def target_q(time):
-	settle_time = 10.0
-	if time <= settle_time:
-		return q_desried_0
-	else:
-		return trajectory.eval(time-settle_time,True)[3:15]
+	# settle_time = 1.0
+	# if time <= settle_time:
+	# 	return q_desried_0
+	# else:
+	# 	return trajectory.eval(time-settle_time,True)[3:15]
 
 #print(target_q(0.2),target_q(1.6))
 
@@ -32,11 +33,15 @@ def target_q(time):
 error = np.array([0.0]*12)
 last_error = np.array([0.0]*12)
 accumulated_error = np.array([0.0]*12)
-world = simulator.getWorld()
+
+robot = robosimian()
+world = robot.get_world()
+robot.set_q_2D_(q_2D)
+
 vis.add("world",world)
 vis.show()
 vis.addText('time','time: '+str(0))
-time.sleep(1.0)
+time.sleep(5.0)
 simulation_time = 0.0
 start_time = time.time()
 
@@ -47,10 +52,11 @@ u_history = []
 time_history = []
 
 
-while vis.shown() and (simulation_time < 10.001):
+while vis.shown() and (simulation_time < 9.001):
 	#loop_start_time = time.time()
 	vis.lock()
 	#simulation_time = time.time() - start_time
+	#print(simulator.getConfig())
 	current_q = simulator.getConfig()[3:15] #1d array of 15 elements
 	desired_q = np.array(target_q(simulation_time))
 	last_error = deepcopy(error)
@@ -76,25 +82,29 @@ while vis.shown() and (simulation_time < 10.001):
 	simulation_time += dt
 	vis.clearText()
 	vis.addText('time','time: '+str(simulation_time))
-	print('time',simulation_time)
-	print('desired q',desired_q)
-	print('current q',current_q)
-	print('error',error)
-	print('u:',u)
+	# print('time',simulation_time)
+	# print('desired q',desired_q)
+	# print('current q',current_q)
+	# print('error',error)
+	# print('u:',u)
 	#print('current_time',simulation_time)
 
 	simulate_start_time = time.time()
 	simulator.simulateOnce(u,continuous_simulation = True)
-	print('Simulate Once took:',time.time() - simulate_start_time)
+	#print('Simulate Once took:',time.time() - simulate_start_time)
+	robot.set_q_2D_(simulator.getConfig())
 	vis.unlock()
-	time.sleep(0.2)
+	#time.sleep(0.001)
 
-
-
-# np.save('results/PID_trajectory/2/q_history.npy',np.array(q_history))
-# np.save('results/PID_trajectory/2/q_dot_history.npy',np.array(q_dot_history))
-# np.save('results/PID_trajectory/2/u_history.npy',np.array(u_history))
-# np.save('results/PID_trajectory/2/time_history.npy',np.array(time_history))
-
-simulator.closePool()
+while vis.shown():
+	time.sleep(1)
 vis.kill()
+
+No = 7
+np.save('results/PID_trajectory/'+str(No)+'/q_history.npy',np.array(q_history))
+np.save('results/PID_trajectory/'+str(No)+'/q_dot_history.npy',np.array(q_dot_history))
+np.save('results/PID_trajectory/'+str(No)+'/u_history.npy',np.array(u_history))
+np.save('results/PID_trajectory/'+str(No)+'/time_history.npy',np.array(time_history))
+
+#simulator.closePool()
+#vis.kill()

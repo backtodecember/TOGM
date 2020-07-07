@@ -53,7 +53,7 @@ class robosimianDyn(Dynamics):
         if (np.linalg.norm(self.current_x - x) < self.compare_eps) and (np.linalg.norm(self.current_u - u) < self.compare_eps):
             return self.current_J[:,0:self._state_size]
         else:
-            _,self.current_J = self.robot.getDynJac(x,u)
+            self.current_J = self.robot.getDynJacNext(x,u)
             self.current_x = x
             self.current_u = u
             return self.current_J[:,0:self._state_size]
@@ -63,7 +63,7 @@ class robosimianDyn(Dynamics):
         if (np.linalg.norm(self.current_x - x) < self.compare_eps) and (np.linalg.norm(self.current_u - u) < self.compare_eps):
             return self.current_J[:,self._state_size:self._action_size + self._state_size]
         else:
-            _,self.current_J = self.robot.getDynJac(x,u)
+            self.current_J = self.robot.getDynJacNext(x,u)
             self.current_x = x
             self.current_u = u
             return self.current_J[:,self._state_size:self._action_size + self._state_size]
@@ -85,20 +85,27 @@ class robosimianCost(AutoDiffCost):
 
 if __name__ == "__main__":
     #LQR setup
-    robosimianDyn = robosimianDyn(dt = 0.01)
-    Q = np.zeros((30,30)) 
-    Q[15,15] = 2.0 #torso speed
-    Q[1,1] = 1.0 #torso height
+    dt = 0.005
+    robosimianDyn = robosimianDyn(dt = dt)
+    #Q = np.zeros((30,30)) 
+    Q = np.eye(30)*0.001
+    Q[15,15] = 100.0 #torso speed
+    Q[1,1] = 0.01 #torso height
     x_goal = np.zeros(30)
     x_goal[15] = 0.3
-    x_goal[1] = 0.9 
-    R = np.eye(12,12)*0.01 #regularize the control a little bit
+    x_goal[1] = 0.92 
+    #R = np.eye(12)*0.001 #regularize the control a little bit
+    R = np.zeros((12,12))
     cost = QRCost(Q = Q,R = R, x_goal = x_goal)
 
     #initial guess and other setup
-    N = 2000 #10s with dt = 0.005
-    x0 = np.concatenate((np.load('results/PID_trajectory/4/q_history.npy')[1],np.load('results/PID_trajectory/4/q_dot_history.npy')[1]))
-    u0 = np.load('results/PID_trajectory/4/u_history.npy')[1:2001] #N*action_size
+    N = 1800 #9s with dt = 0.005
+    No = 4
+    # x0 = np.concatenate((np.load('results/PID_trajectory/'+str(No)+'/q_history.npy')[1001],np.load('results/PID_trajectory/'+str(No)+'/q_dot_history.npy')[1001]))
+    # u0 = np.load('results/PID_trajectory/'+str(No)+'/u_history.npy')[1001:2001] #N*action_size
+    x0 = np.concatenate((np.load('results/PID_trajectory/'+str(No)+'/q_history.npy')[201],np.load('results/PID_trajectory/'+str(No)+'/q_dot_history.npy')[201]))
+    u0 = np.load('results/PID_trajectory/'+str(No)+'/u_history.npy')[201:2001] #N*action_size
+
     ilqr = iLQR(robosimianDyn,cost,N)
     #callback function
     J_hist = []
