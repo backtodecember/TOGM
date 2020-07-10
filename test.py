@@ -32,15 +32,36 @@ from klampt.io import loader
 # np.save('results/PID_trajectory/2/x_init_guess.npy',x)
 # np.save('results/PID_trajectory/2/u_init_guess.npy',u)
 
-a = [1,2]
-b = np.array(a)
-print(type(a),type(b))
-if isinstance(a,list):
-    print('list')
-if isinstance(b,np.ndarray):
-    print('numpy array')    
+# a = [1,2]
+# b = np.array(a)
+# print(type(a),type(b))
+# if isinstance(a,list):
+#     print('list')
+# if isinstance(b,np.ndarray):
+#     print('numpy array')    
 
-(m,) = np.shape(a)
-N = len(a)
-print(m)
-print(N)
+# (m,) = np.shape(a)
+# N = len(a)
+# print(m)
+# print(N)
+
+# x = np.hstack((np.load('results/PID_trajectory/4/q_init_guess.npy'),np.load('results/PID_trajectory/4/q_dot_init_guess.npy')))
+# # u = np.load('results/PID_trajectory/4/u_history.npy')
+# # print(np.shape(x),np.shape(u))
+# Q = np.zeros((30,30))
+# Q[1,1] = 0.01
+# Q[15,15] = 10.0
+# xbase = np.zeros(30)
+# xbase[1] = 0.9
+# xbase[15] = 0.2
+# total = 0.0
+# for i in range(180):
+#     v = x[i,:][np.newaxis]
+#     #print(np.shape(v))
+#     val = v@Q@v.T
+#     total += val[0,0]
+#     print(val[0,0])
+# print(total)
+
+x = np.load('results/21/run3/solution_x500.npy')
+print(x[:,15])

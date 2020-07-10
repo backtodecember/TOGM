@@ -35,6 +35,7 @@ class robosimianSimulator:
 		self.integrate_dt = integrate_dt
 		self.time = 0
 		self.dof = 15
+		self.integration = 'semi-Euler' #"semi-Euler"
 		if self.dyn == 'own':
 			self.robot = robosimian(print_level = print_level, RL = RL)
 			self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
@@ -132,6 +133,8 @@ class robosimianSimulator:
 					ee.detectEndEffector(self.robot.body,zRange)
 					ees.append(ee)
 
+
+			#print('debug:',self.q,self,q_dot)
 			#create the simulator, use RK1F mode, force-level MDP
 			self.robot.create_simulator(accuracy=64,granular=True,mode = DNE.FORWARD_RK1F)     #this will use double
 			#self.robot.create_simulator(accuracy=128,granular=True,mode = DNE.FORWARD_RK1F)    #this will use quadmath
@@ -212,6 +215,34 @@ class robosimianSimulator:
 				self.q_dot = self._own_to_diffne(q = np.array(qdqNext[15:30]))[np.newaxis].T
 				return a,DynJac,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
+	def getDynJacNext(self,x,control):
+		"""
+		The dynamics jocabian here is not da/dx, but dxnext/dx
+
+		"""
+		if self.dyn == 'own':
+			raise RuntimeError('own dynamics does not have this implemented yet')
+		
+		q = self._own_to_diffne(x[0:15])
+		q_dot = self._own_to_diffne(x[15:30])
+		u = -deepcopy(control)
+		qdq = q.tolist() + q_dot.tolist()
+
+		self.q = q[np.newaxis].T
+		self.q_dot = q_dot[np.newaxis].T
+
+		tau = [0,0,0] + u.tolist() #diffNE has control on all dofs
+		qdqNext,Dqdq,Dtau=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=True,Dtau=True)
+		
+		#calcualte DynJac
+		Dqdq = np.array(Dqdq) #30-by-30
+		Dtau = np.array(Dtau) #30-by-15
+		#x means q, q_dot, tau
+		DynJac = np.hstack((Dqdq,Dtau[:,3:15]))
+		#now flip the axes back
+		DynJac = self._own_to_diffne(J = DynJac)
+
+		return DynJac
 
 	def getDyn(self,x,control,continuous = False):
 		"""
@@ -544,15 +575,19 @@ class robosimianSimulator:
 			tau = [0,0,0] + u1.tolist() #diffNE has control on all dofs
 
 			qdqNext,_,_=self.robot.simulate(self.dt,qdq,tau=tau,Dqdq=False,Dtau=False)
-			# a = (np.array(qdqNext[15:30]) - np.array(qdq)[15:30])/self.dt
-			# #flip the axes back
-			# a = self._own_to_diffne(q = a)
-			# a = a[np.newaxis].T
+			a = (np.array(qdqNext[15:30]) - np.array(qdq)[15:30])/self.dt
+			#flip the axes back
+			a = self._own_to_diffne(q = a)
+			a = a[np.newaxis].T
 			if not continuous_simulation:
 				return 
 			else:
-				self.q = self._own_to_diffne(q = np.array(qdqNext[0:15]))[np.newaxis].T
-				self.q_dot = self._own_to_diffne(q = np.array(qdqNext[15:30]))[np.newaxis].T
+				if self.integration == 'semi-Euler':
+					self.q = self._own_to_diffne(q = np.array(qdqNext[0:15]))[np.newaxis].T
+					self.q_dot = self._own_to_diffne(q = np.array(qdqNext[15:30]))[np.newaxis].T
+				elif self.integration == 'Euler':
+					self.q = self.q + self.q_dot*self.dt
+					self.q_dot = self.q_dot + a*self.dt
 				return
 
 			return
@@ -663,8 +698,10 @@ class robosimianSimulator:
 		"""
 		self.q= q[np.newaxis].T
 		self.q_dot = q_dot[np.newaxis].T
-		self.robot.set_q_2D_(q)
-		self.robot.set_q_dot_2D_(q_dot)
+
+		if self.dyn == 'own':
+			self.robot.set_q_2D_(q)
+			self.robot.set_q_dot_2D_(q_dot)
 
 		if self.RL:
 			_ = self.generateContacts()
@@ -939,7 +976,20 @@ class robosimianSimulator:
 	def closePool(self):
 		self.compute_pool.close()
 
+	def q_2D_to_3D_(self,q):
+		"""
+		Parameters:
+		q is list/1D array
 
+		Return:
+		list
+		"""
+		self.joint_indices_3D = [0,2,4,8,10,12,16,18,20,24,26,28,32,34,36]
+		self.joint_indices_2D = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]
+		q_3D = [0]*38
+		for (i,j) in zip(self.joint_indices_3D,self.joint_indices_2D):
+			q_3D[i] = q[j]
+		return q_3D
 
 if __name__=="__main__":
 

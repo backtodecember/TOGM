@@ -88,23 +88,23 @@ if __name__ == "__main__":
     dt = 0.005
     robosimianDyn = robosimianDyn(dt = dt)
     #Q = np.zeros((30,30)) 
-    Q = np.eye(30)*0.001
-    Q[15,15] = 100.0 #torso speed
+    Q = np.eye(30)*0.0
+    Q[15,15] = 10.0 #torso speed
     Q[1,1] = 0.01 #torso height
     x_goal = np.zeros(30)
     x_goal[15] = 0.3
-    x_goal[1] = 0.92 
+    x_goal[1] = 0.85
     #R = np.eye(12)*0.001 #regularize the control a little bit
     R = np.zeros((12,12))
     cost = QRCost(Q = Q,R = R, x_goal = x_goal)
 
     #initial guess and other setup
-    N = 1800 #9s with dt = 0.005
+    N = 300 #1.5s with dt = 0.005
     No = 4
     # x0 = np.concatenate((np.load('results/PID_trajectory/'+str(No)+'/q_history.npy')[1001],np.load('results/PID_trajectory/'+str(No)+'/q_dot_history.npy')[1001]))
     # u0 = np.load('results/PID_trajectory/'+str(No)+'/u_history.npy')[1001:2001] #N*action_size
     x0 = np.concatenate((np.load('results/PID_trajectory/'+str(No)+'/q_history.npy')[201],np.load('results/PID_trajectory/'+str(No)+'/q_dot_history.npy')[201]))
-    u0 = np.load('results/PID_trajectory/'+str(No)+'/u_history.npy')[201:2001] #N*action_size
+    u0 = np.load('results/PID_trajectory/'+str(No)+'/u_history.npy')[201:501] #N*action_size
 
     ilqr = iLQR(robosimianDyn,cost,N)
     #callback function

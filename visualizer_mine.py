@@ -152,7 +152,8 @@ import time
 
 
 ###### quickly visualize x 
-x = np.load('results/20/run3/solution_x600.npy')
+x = np.load('results/20/run4/solution_x5.npy')
+#x = np.load('temp_files/solution_x100.npy')
 robot = robosimian()
 world = robot.get_world()
 robot.set_q_2D_(x[0,0:15])
@@ -164,7 +165,7 @@ current_time = 0.0
 vis.add("world",world)
 vis.show()
 vis.addText('time','time: '+str(current_time))
-time.sleep(1.0)
+time.sleep(10.0)
 simulation_time = 0.0
 start_time = time.time()
 
@@ -174,7 +175,7 @@ for i in range(m):
 	vis.addText('time','time: '+str(current_time))
 	current_time += dt
 	vis.unlock()
-	time.sleep(dt)
+	time.sleep(0.05)
 
 while vis.shown():
 	time.sleep(1)
