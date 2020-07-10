@@ -190,13 +190,18 @@ class granularMedia:
 						w = np.array(weights[iteration2])[np.newaxis].T
 						Q4 = Q4 + np.dot(w,np.array(grad)[np.newaxis])
 					
-					#TODO: is this a bug here for SA?.. it seems that I did not modify the gradient for the ankle
 
 					#p[2] = -p[2]  #the torque defined when robosimian is collecting data is y, into the page.. no longer needs to flip here
+					C = ankle_length/2.0-self.cT
 					unit_direction =  [-math.sin(theta_new[1]),0,-math.cos(theta_new[1])]
-					tmp = vo.cross(vo.mul(unit_direction,ankle_length/2.0-self.cT),[p[0],0,p[1]])
+					tmp = vo.cross(vo.mul(unit_direction,C),[p[0],0,p[1]])
 					p[2] = p[2] + tmp[2]
 					wrenches[iteration] = p
+
+					#modify the gradient to account for change of torque center
+					Q4[2,0] = Q4[2,0] + math.cos(theta_new[1])*C*Q4[0,0] - math.sin(theta_new[1])*C*Q4[1,0]
+					Q4[2,1] = Q4[2,1] + math.cos(theta_new[1])*C*Q4[0,1] - math.sin(theta_new[1])*C*Q4[1,1]\
+						- p[0]*math.sin(theta_new[1])*C - p[1]*math.cos(theta_new[1])
 
 					#TODO: for a slope, we would need to do this..
 					#wrenches[iteration][0:2] = so2.apply(wrenches[iteration][0:2],slope_angle)
@@ -206,10 +211,10 @@ class granularMedia:
 						if contact[2] < 0:
 							wrenches[iteration,0] = -wrenches[iteration,0]
 							wrenches[iteration,2] = -wrenches[iteration,2]
-
 					Q4s[iteration,:] = self._vectorize(Q4)
 
 
+				##code for debugging
 				# plot_flag = True
 				# average_wrench = self._average(wrenches)
 				# print('The wrenches are:',wrenches)
