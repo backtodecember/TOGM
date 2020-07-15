@@ -6,16 +6,18 @@ from copy import deepcopy
 
 q0 = np.array(configs.q_staggered_augmented)[np.newaxis].T
 q_dot0 = np.zeros((15,1))
-robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = 0.005, solver = 'cvxpy', augmented = True)
+robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = 0.005, dyn = 'diffne', augmented = True)
 
-N = 100
+N = 181
 case = '11-2'
-u = np.load('results/'+case+'/solution_u.npy')
-x_simulation = np.load('results/'+case+'/solution_x.npy')
+# u = np.load('results/25/'+case+'/solution_u.npy')
+# x_simulation = np.load('results/25/'+case+'/solution_x.npy')
 
+x_simulation = np.load('results/25/run10/solution_x891.npy')
+u = np.load('results/25/run10/solution_u891.npy')
 u_traj = u
 
-dt = 0.005
+dt = 0.05
 
 
 
@@ -78,11 +80,18 @@ for i in range(m):
 # plt.title('trajectory')
 # plt.show()
 
-#plot control
-
-plt.plot(time,u[:,0],time,u[:,1],time,u[:,2],time,u[:,3],time,u[:,4],time,u[:,5])
-plt.legend(['u1','u2','u3','u4','u5','u6'])
+plt.plot(time,x_dot[:,0])
+plt.legend(['torso x-velocity'])
 plt.ylabel('state')
 plt.xlabel('time')
-plt.title('controls')
+plt.title('trajectory')
 plt.show()
+
+#plot control
+
+# plt.plot(time,u[:,0],time,u[:,1],time,u[:,2],time,u[:,3],time,u[:,4],time,u[:,5])
+# plt.legend(['u1','u2','u3','u4','u5','u6'])
+# plt.ylabel('state')
+# plt.xlabel('time')
+# plt.title('controls')
+# plt.show()

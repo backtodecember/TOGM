@@ -19,7 +19,7 @@ class analyzer:
 		self.dt = dt
 		q0 = np.array(configs.q_staggered_augmented)[np.newaxis].T
 		q_dot0 = np.zeros((15,1))
-		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = 0.05, solver = 'cvxpy', augmented = True, extrapolation= True)
+		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = 0.05, dyn = 'own', augmented = True, extrapolation= True)
 		self.case = case
 
 		if x_data != []:
@@ -37,7 +37,7 @@ class analyzer:
 		#slow down 20x
 
 		#settings for animating the trajectory
-		self.vis_dt = 0.005*10
+		self.vis_dt = 0.005*30
 		self.force_scale = 0.001 #200N would be 0.2m
 
 		self.world = self.robot.getWorld()
@@ -545,18 +545,18 @@ if __name__=="__main__":
 	# print(traj_guess[-1,0])
 
 	##### code to evaluate an optimized trajectory
-	# iteration = 11
-	# traj = np.load('results/19/run2/solution_x'+str(iteration) +'.npy')
-	# u = np.load('results/19/run2/solution_u'+str(iteration)+'.npy')
+	iteration = 891
+	traj = np.load('results/25/run10/solution_x'+str(iteration) +'.npy')
+	u = np.load('results/25/run10/solution_u'+str(iteration)+'.npy')
 
 	# # traj = np.load('temp_files/solution_x10.npy')
 	# # u = np.load('temp_files/solution_u10.npy')
 	# # traj = np.load('results/17/solution_x'+str(iteration) +'.npy')
 	# # u = np.load('results/17/solution_u'+str(iteration)+'.npy')
 
-	# analyzer = analyzer('19',dt = 0.05,method = "Euler",x_data = traj, u_data = u)
-	# analyzer.calculation()
-	# analyzer.animate() #animate the trajectory
+	analyzer = analyzer('25',dt = 0.05,method = "Euler",x_data = traj, u_data = u)
+	analyzer.calculation()
+	analyzer.animate() #animate the trajectory
 	# print('objective is',analyzer.objective(traj,u_))
 	# print('initial torso x:',traj[0,0])
 	# print('final torso x:',traj[-1,0])
@@ -613,7 +613,7 @@ if __name__=="__main__":
 	# print(traj_guess[-1,0])
 
 
-	traj_guess = np.hstack((np.load('results/PID_trajectory/4/q_init_guess.npy'),np.load('results/PID_trajectory/4/q_dot_init_guess.npy')))
-	u = np.load('results/PID_trajectory/4/u_init_guess.npy')
-	tracker = PIDTracker('20',True,traj_dt=0.05,x_data = traj_guess,u_data = u, initial =False)
-	tracker.run()
+	# traj_guess = np.hstack((np.load('results/PID_trajectory/4/q_init_guess.npy'),np.load('results/PID_trajectory/4/q_dot_init_guess.npy')))
+	# u = np.load('results/PID_trajectory/4/u_init_guess.npy')
+	# tracker = PIDTracker('20',True,traj_dt=0.05,x_data = traj_guess,u_data = u, initial =False)
+	# tracker.run()

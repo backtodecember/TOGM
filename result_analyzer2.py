@@ -1,6 +1,5 @@
 """
-This file includes the class of methods for visualizing and analyzing the results from 
-a trajectory optimizer by only using the optimize x and u
+This one does not contain the force?
 """
 import numpy as np
 from robosimian_GM_simulation import robosimianSimulator
@@ -18,7 +17,7 @@ class analyzer2:
 		self.dt = dt
 		q0 = np.array(configs.q_staggered_augmented)[np.newaxis].T
 		q_dot0 = np.zeros((15,1))
-		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = dt, solver = 'cvxpy', augmented = True, extrapolation= True)
+		self.robot = robosimianSimulator(q = q0, q_dot = q_dot0, dt = dt, dyn = 'diffne', augmented = True, extrapolation= True)
 		self.case = case
 		if run:
 			self.run = run
@@ -38,8 +37,8 @@ class analyzer2:
 		self.vis_dt = 0.005*10
 		self.force_scale = 0.001 #200N would be 0.2m
 
-		self.world = self.robot.getWorld()
-		vis.add("world",self.world)
+		# self.world = self.robot.getWorld()
+		# vis.add("world",self.world)
 
 	def calculation(self):
 		self.ankle_position_list = []
@@ -104,6 +103,36 @@ class analyzer2:
 				iterations.append(0)
 			else:
 				objective_values.append(np.load(prefix+str(i)+'.npy'))
+				iterations.append(i)
+		print(objective_values)
+		##plotting
+		plt.plot(iterations,objective_values)
+		plt.title('Objective Values over Iterations')
+		plt.grid()
+		plt.ylabel('Objective')
+		plt.xlabel('Iterations')
+		plt.show()
+		return
+
+	@classmethod
+	def perIterationObj2(cls):
+		#this is created just to accomodate test25 run 10, where the first 500 iteratoins are from run8
+		#and things are recorded every 10 iters...
+		objective_values = []
+		iterations = []
+		indeces = [0] + np.arange(1,892,10).tolist()
+		prefix1 = 'results/25/run8/knitro_obj'
+		prefix2 = 'results/25/run10/knitro_obj'
+		for i in indeces:
+			if i == 0:
+				#add the initial guess's values
+				objective_values.append(9.185094e+00)
+				iterations.append(0)
+			elif i < 510:
+				objective_values.append(np.load(prefix1+str(i)+'.npy'))
+				iterations.append(i)
+			else:
+				objective_values.append(np.load(prefix2+str(i)+'.npy'))
 				iterations.append(i)
 		print(objective_values)
 		##plotting
@@ -403,10 +432,10 @@ class PIDTracker:
 if __name__=="__main__":
 	x = np.load('results/17/run4/solution_x1.npy')
 	u = np.load('results/17/run4/solution_u1.npy')
-	analyzer = analyzer2(x,u,case = '19',run = '2',dt = 0.05,method = "Euler")
-	analyzer.perIterationConstrVio(11,'results/19/run2/knitro_con')
-	analyzer.perIterationObj(11,'results/19/run2/knitro_obj')
-
+	#analyzer = analyzer2(x,u,case = '19',run = '2',dt = 0.05,method = "Euler")
+	#analyzer.perIterationConstrVio(11,'results/19/run2/knitro_con')
+	#analyzer.perIterationObj(11,'results/19/run2/knitro_obj')
+	analyzer2.perIterationObj2()
 
 
 	##### code to evaluate the intial guess
