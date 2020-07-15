@@ -63,5 +63,5 @@ from klampt.io import loader
 #     print(val[0,0])
 # print(total)
 
-x = np.load('results/21/run3/solution_x500.npy')
-print(x[:,15])
+x = np.load('results/25/run10/solution_x891.npy')
+print(x[:,1])

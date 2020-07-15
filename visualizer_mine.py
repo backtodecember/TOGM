@@ -152,8 +152,8 @@ import time
 
 
 ###### quickly visualize x 
-x = np.load('results/20/run4/solution_x5.npy')
-#x = np.load('temp_files/solution_x100.npy')
+x = np.load('results/25/run7/solution_x1033.npy')
+# x = np.load('temp_files/solution_x891.npy')
 robot = robosimian()
 world = robot.get_world()
 robot.set_q_2D_(x[0,0:15])
@@ -175,7 +175,7 @@ for i in range(m):
 	vis.addText('time','time: '+str(current_time))
 	current_time += dt
 	vis.unlock()
-	time.sleep(0.05)
+	time.sleep(0.2)
 
 while vis.shown():
 	time.sleep(1)

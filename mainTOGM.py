@@ -266,7 +266,7 @@ class transportationCost(NonLinearObj):
 		#setting 16 - 18
 		#self.scale = 100.0
 		#setting 17 run 3
-		self.scale = 5000.0 # 500.0
+		self.scale = 500.0#5000.0 # 500.0
 		#TODO, need to modify the gradient for adding small_C
 		self.small_C = 0.01
 	def __callg__(self,x, F, G, row, col, rec, needg):
@@ -330,11 +330,13 @@ class transportationCost(NonLinearObj):
 #target velocity
 Q = np.zeros(30)
 Q[1] = 0.01
+Q[2] = 0.01
 Q[15] = 10.0
 xbase = np.zeros(30)
-xbase[1] = 0.63# 0.9
+xbase[2] = 0.0
+xbase[1] = 0.9 #0.63# 0.9
 xbase[15] = 0.3
-targetVelocityCost = LqrObj(Q = Q, xbase = xbase)
+targetVelocityCost = LqrObj(Q = Q, R = np.ones(12)*0.00001,xbase = xbase)
 
 #zeroCost = LqrObj(Q= np.array([0.0]*15+[1.0]*15))
 zeroCost = LqrObj(Q= np.array([0.0]*30))
@@ -432,22 +434,22 @@ class periodicCost(NonLinearObj):
 #setting 19,20
 # c1 = transportationCost()
 # c2 = enoughTranslationCost()
-#constr1 = anklePoseConstr()
+# constr1 = anklePoseConstr()
 # problem.addNonLinearObj(c1)
 # problem.addNonLinearObj(c2)
 # problem.addNonLinearPointConstr(constr1,path = True)
 
 #setting 21,24
-# constr1 = anklePoseConstr()
-# periodicCost = periodicCost()
-problem.add_lqr_obj(zeroCost)
-# problem.addNonLinearObj(periodicCost)
-# problem.addNonLinearPointConstr(constr1,path = True)
+constr1 = anklePoseConstr()
+#periodicCost = periodicCost()
+problem.add_lqr_obj(targetVelocityCost)
+#problem.addNonLinearObj(periodicCost)
+problem.addNonLinearPointConstr(constr1,path = True)
 
 #setting 23
 # c2 = enoughTranslationCost()
 # problem.addNonLinearObj(c2)
-#problem.addNonLinearPointConstr(constr1,path = True)
+# problem.addNonLinearPointConstr(constr1,path = True)
 
 
 
@@ -460,7 +462,7 @@ startTime = time.time()
 #setting before 19
 # problem.preProcess()
 #setting 19
-problem.pre_process(dyn_tol = 1e-3,snopt_mode = False)
+problem.pre_process(snopt_mode = False) #dyn_tol
 print('preProcess took:',time.time() - startTime)
 
 
@@ -487,8 +489,9 @@ print('preProcess took:',time.time() - startTime)
 ##1097 KN_PARAM_INITPENALTY (default 1), 1080 derivative check, 1082 derivative check tolerence
 ##1049 adopt flexible penalty parameter in the merit function to weight feasibility vs optimality: 1:use a single parameter 2:flexible
 #1105:knitro output name, 1047 path name
+#1003: algorithm. #4 is sqp
 ##debug information 1032
-options = {'1014':2000,'1023':1e-3,'1016':2,'1033':0,'1003':0,'1022':1e-3,'1027':1e-3,'1006':2,'1049':2,'1080':0,'1082':1e-4,\
+options = {'1014':2,'1023':1e-3,'1016':2,'1033':0,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,\
 	'history':True} #'1105':'run2.log','1047':'temp_files/',
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
@@ -519,8 +522,8 @@ slv = OptSolver(problem, cfg)
 # guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 #setting 17,19,21
-# traj_guess = np.load('results/PID_trajectory/4/x_init_guess.npy')
-# u_guess = np.load('results/PID_trajectory/4/u_init_guess.npy')
+# traj_guess = np.load('results/PID_trajectory/3/x_init_guess.npy')
+# u_guess = np.load('results/PID_trajectory/3/u_init_guess.npy')
 
 # traj_guess = np.load('results/19/run2/solution_x11.npy')
 # u_guess = np.load('results/19/run2/solution_u11.npy')
@@ -538,6 +541,9 @@ u_guess = np.load('results/PID_trajectory/4/u_init_guess.npy')
 # traj_guess = np.hstack((np.load('results/PID_trajectory/4/q_history.npy')[200:2001],np.load('results/PID_trajectory/4/q_dot_history.npy')[200:2001]))
 # u_guess = np.load('results/PID_trajectory/4/u_history.npy')[200:2001]
 
+
+# traj_guess = np.load('../TOGM/results/25/run8/solution_x501.npy')
+# u_guess = np.load('../TOGM/results/25/run8/solution_u501.npy')
 guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 
@@ -547,7 +553,7 @@ guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 ###save initial guess        ##
 ###############################
 
-save_flag =True
+save_flag =False
 if save_flag:
 	parsed_result = problem.parse_f(guess)
 	for key, value in parsed_result.items() :
@@ -555,8 +561,8 @@ if save_flag:
 
 	np.save('temp_files/knitro_obj0.npy',np.array([0.0]))
 	dyn_constr = np.array(parsed_result['dyn']).flatten()
-	#ankle_constr = parsed_result['path'][0].flatten()
-	#np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
+	# ankle_constr = parsed_result['path'][0].flatten()
+	# np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,ankle_constr,np.array([0.0]))))
 	np.save('temp_files/knitro_con0.npy',np.concatenate((dyn_constr,np.array([0.0]))))
 
 
@@ -585,21 +591,32 @@ startTime = time.time()
 rst = slv.solve_guess(guess)
 i = 0
 for history in rst.history:
-	sol = problem.parse_sol(history['x'])
-	np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
-	np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
+	if (i%10 == 0):
+		sol = problem.parse_sol(history['x'])
+		np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
+		np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
 
-	### This saves everything from the optimizer
-	np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
-	np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
+		### This saves everything from the optimizer
+		np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
+		np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
 
-	### 
-	# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
-	# parsed_result = problem.parse_f(result_0)
-	# np.save('temp_files/solverlib_obj.npy',np.array(parsed_result['obj']))
-	# np.save('temp_files/solverlib_con.npy',parsed_result['path'][0])
+		### 
+		# result_0 = problem.genGuessFromTraj(X= sol['x'], U= sol['u'], t0 = 0, tf = tf)
+		# parsed_result = problem.parse_f(result_0)
+		# np.save('temp_files/solverlib_obj.npy',np.array(parsed_result['obj']))
+		# np.save('temp_files/solverlib_con.npy',parsed_result['path'][0])
 	
 	i += 1
+
+i = i - 1
+
+sol = problem.parse_sol((rst.history[i])['x'])
+np.save('temp_files/solution_u'+str(i+1)+'.npy',sol['u'])
+np.save('temp_files/solution_x'+str(i+1)+'.npy',sol['x'])
+
+### This saves everything from the optimizer
+np.save('temp_files/knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
+np.save('temp_files/knitro_con'+str(i+1)+'.npy',history['con'])
 
 
 print('Took', time.time() - startTime)
