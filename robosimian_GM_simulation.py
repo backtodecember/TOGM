@@ -36,6 +36,7 @@ class robosimianSimulator:
 		self.time = 0
 		self.dof = 15
 		self.integration = 'semi-Euler' #"semi-Euler"
+		self.profile_computation = False
 		if self.dyn == 'own':
 			self.robot = robosimian(print_level = print_level, RL = RL)
 			self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
@@ -334,7 +335,8 @@ class robosimianSimulator:
 		"""	
 
 		if self.dyn == 'own':
-			loop_start_time = time.time()
+			if self.profile_computation:
+				loop_start_time = time.time()
 			##add viscious friction
 			if self.RL:
 				u_friction = []
@@ -370,6 +372,8 @@ class robosimianSimulator:
 				#SA
 				self.dhy[0:12,12:116] = np.zeros((12,104))
 
+			if self.profile_computation:
+				print('Calculated Dynamics:',time.time() - loop_start_time)
 
 			##### compute the wrench space of at 4 ankles in parallel using process ###
 			args = []
@@ -392,6 +396,8 @@ class robosimianSimulator:
 						self.dhy[contacts[i][3]*3:(contacts[i][3]+1)*3,contacts[i][3]*26+12:(contacts[i][3]+1)*26+12] = -add_A
 						Q4s_all_limbs.append(Q4s)
 
+			if self.profile_computation:
+				print('Calculated Wrench space and drivatives:',time.time() - loop_start_time)
 
 			# for contact in contacts:
 			# 	add_A,Q4s = self.terrain.feasibleWrenchSpace(contact,self.robot.ankle_length,True)
@@ -424,6 +430,9 @@ class robosimianSimulator:
 				#self.prob.solve(verbose = False,warm_start = True)
 				# print('CVX solving took:',time.time() - start_time)
 
+				if self.profile_computation:
+					print('CVXPY finished:',time.time() - loop_start_time)
+
 				x_k = self.x.value[0:12]
 				wc = x_k
 
@@ -451,8 +460,15 @@ class robosimianSimulator:
 
 				#Sensitivity analysis 
 				if SA:
-					self.dEyy[0:12,0:12] = self.D.value.T@self.M.value@self.D.value				
+					self.dEyy[0:12,0:12] = self.D.value.T@self.M.value@self.D.value		
+					if self.profile_computation:
+						start_time_dyn = time.time()
+
 					dQ1dx,dadx = self._klamptFDRelated(C,D,x_k,u)
+
+					if self.profile_computation:
+						print('Dynamics Derivative:',time.time() - start_time_dyn)
+						
 					self.dEyx[0:self.Dx+self.Du,0:12] = dQ1dx
 					self.mudhyx[:,12:116] = np.zeros((self.Dx+self.Du,self.Dlambda))
 					mus = self.constraints[0].dual_value#only need these mus
@@ -512,6 +528,8 @@ class robosimianSimulator:
 					dx_dotdx[0:15,15:30] = np.eye(15)
 					dx_dotdx[15:30,:] = dadx_full
 
+					if self.profile_computation:
+						print('SA finished:',time.time() - loop_start_time)
 
 				if fixed:
 					all_fixed_joint_torques = np.add(L_prime,(L_J@x_k).ravel())
