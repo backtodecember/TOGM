@@ -152,7 +152,7 @@ import time
 
 
 ###### quickly visualize x 
-x = np.load('results/25/run7/solution_x1033.npy')
+x = np.load('results/27/run3/solution_x961.npy')
 # x = np.load('temp_files/solution_x891.npy')
 robot = robosimian()
 world = robot.get_world()
@@ -175,7 +175,7 @@ for i in range(m):
 	vis.addText('time','time: '+str(current_time))
 	current_time += dt
 	vis.unlock()
-	time.sleep(0.2)
+	time.sleep(0.1)
 
 while vis.shown():
 	time.sleep(1)
