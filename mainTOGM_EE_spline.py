@@ -171,9 +171,10 @@ class EESplineConstraint(NonLinearConstr):
 		self.nAddX =  2*4*10
 		self.nc = 8*((N-1)/self.gap+1)
 		self.state_length = N*(self.nX+self.nU+self.nP) 
-
+		self.robot = robosimian()
 		#the points at which the dynamics are enforced
 		self.mesh_indeces = np.linspace(0,1,(N-1)/self.gap+1)
+		self.mesh_indeces_int = np.arange(0,N,1)
 
 		NonLinearConstr.__init__(self, nsol = self.state_length + self.nAddx,nc = self.nc,lb = np.zeros(self.nc), ub = np.zeros(self.nc), \
 			gradmode='user', nG = )
@@ -186,9 +187,24 @@ class EESplineConstraint(NonLinearConstr):
 		#calculate the splines for 
 		for i in range(4):
 			sp_values = calculate_spline(AddX[i*(self.nAddX/4):(i+1)*(self.nAddX/4)],self.mesh_indeces)
-			constr[i*self.nc/4:(i+1)*self.nc/4] = sp_values
+			constr[i*self.nc/4:(i+1)*self.nc/4] = copy(sp_values)
 
+		fk_array = np.zeros(self.nc)
+		for i in range(len(self.mesh_indeces_int)):
+			self.robot.set_q_2D_(x[1:16])
+			self.robot.set_q_dot_2D_(x[16:31])
+			p = self.robot.get_ankle_positions()
+			fk_array[2*i:2*i+2] = np.array([p[0][0],p[0][1]])
+			fk_array[self.nc/4 + 2*i:self.nc/4 + 2*i+2] = np.array([p[1][0],p[1][1]])
+			fk_array[self.nc*2/4 + 2*i:self.nc*2/4 + 2*i+2] = np.array([p[2][0],p[2][1]])
+			fk_array[self.nc*3/4 + 2*i:self.nc*3/4 + 2*i+2] = np.array([p[3][0],p[3][1]])
 
+		constr = constr - fk_array
+		F[:] = constr
+
+		G[:]
+		row[:]
+		col[:]
 
 
 ##############################

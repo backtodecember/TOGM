@@ -591,7 +591,8 @@ startTime = time.time()
 
 ##setting for using Knitro
 rst = slv.solve_guess(guess)
-i = 401
+initial_i = 401
+i = initial_i
 for history in rst.history:
 	if (i%10 == 0):
 		sol = problem.parse_sol(history['x'])
@@ -610,15 +611,15 @@ for history in rst.history:
 	
 	i += 1
 
-i = i - 1 - 401
+i = i - initial_i
 
 sol = problem.parse_sol((rst.history[i])['x'])
-np.save(save_path + 'solution_u'+str(i+1)+'.npy',sol['u'])
-np.save(save_path + 'solution_x'+str(i+1)+'.npy',sol['x'])
+np.save(save_path + 'solution_u'+str(i+initial_i)+'.npy',sol['u'])
+np.save(save_path + 'solution_x'+str(i+initial_i)+'.npy',sol['x'])
 
 ### This saves everything from the optimizer
-np.save(save_path + 'knitro_obj'+str(i+1)+'.npy',np.array(history['obj']))
-np.save(save_path + 'knitro_con'+str(i+1)+'.npy',history['con'])
+np.save(save_path + 'knitro_obj'+str(i+initial_i)+'.npy',np.array(history['obj']))
+np.save(save_path + 'knitro_con'+str(i+initial_i)+'.npy',history['con'])
 
 print('Took', time.time() - startTime)
 print("========results=======")
