@@ -25,12 +25,11 @@ class granularMedia:
 			self.material_range = [-0.07,0.9]
 			#self.W = np.load('data/sandPolyevenWAugmented.npy') #this one does not have the zeros
 			if self.extrapolation:
-				#this one has magnitudes multiplied by 2
-				# self.W = np.load('data/sandPolyevenWAugmented3.npy')
-				# self.theta = np.load('data/sandPolyevenThetaAugmented3.npy')
-				#this one is similar to 3 , but with different augmented theats for zero wrench
-				self.W = np.load('data/sandPolyevenWAugmented4.npy')
-				self.theta = np.load('data/sandPolyevenThetaAugmented4.npy')
+				#No.3: this one has magnitudes multiplied by 2
+				#No.4: this one is similar to 3 , but with different augmented thetas for zero wrench
+				#No.5: same as 4 but magnitudes multiplied by 3 instead
+				self.W = np.load('data/sandPolyevenWAugmented5.npy')
+				self.theta = np.load('data/sandPolyevenThetaAugmented5.npy')
 			else:
 				#2 does not have the magnitudes multiplied
 				self.W = np.load('data/sandPolyevenWAugmented2.npy')

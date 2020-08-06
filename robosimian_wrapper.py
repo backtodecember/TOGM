@@ -259,6 +259,19 @@ class robosimian:
 			Jp[i*2:(i+1)*2,:] = np.array(self.robot_all_active.link(13+i*8).getJacobian((0.15,0,0)))[[5,1],:]
 		return Jp[:,self.joint_indices_3D]
 
+	def compute_Jp_Partial2(self):
+		"""
+		return:
+		---------
+		return the 8 by 15 jacobian of the robot. the x,z position
+
+		"""
+
+		Jp = np.zeros((8,38))
+		for i in [0,1,2,3]:
+			Jp[i*2:(i+1)*2,:] = np.array(self.robot_all_active.link(13+i*8).getJacobian((0.15,0,0)))[[3,5],:]
+		return Jp[:,self.joint_indices_3D]		
+
 	def _clean_vector(self,a):
 		for i in range(len(a)):
 			if math.fabs(a[i]) < 0.000000001:
