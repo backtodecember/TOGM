@@ -31,10 +31,11 @@ class Robosimian(System):
 	def dyn(self,t,x,u,p=None):  
 		a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
 		return np.concatenate([x[15:30],a]) #1D numpy array
+		#return np.zeros(30)
 
 
 	def jac_dyn(self, t, x, u, p=None):
-
+		#return np.zeros(30),np.zeros((30,43))
 		a,J_tmp = self.robot.getDynJac(x,u)
 		a = np.concatenate([x[15:30],np.ravel(a)])		
 		J = np.zeros((30,1+30+12))
@@ -251,7 +252,6 @@ class enoughTranslationCost(NonLinearObj):
 				col[:] = col_entries
 
 
-
 class transportationCost(NonLinearObj):
 	def __init__(self):
 		self.nX = 30
@@ -326,6 +326,46 @@ class transportationCost(NonLinearObj):
 				row[:] = [0]*len(nonzeros)
 				col[:] = nonzeros
 
+class accelerationCost(NonLinearObj):
+	def __init__(self):
+		self.nX = 30
+		self.nU = 12
+		self.nP = 0
+		global N
+		self.N = N
+		self.C = 0.0001
+		NonLinearObj.__init__(self,nsol = self.N*(self.nX+self.nU+self.nP),nG = self.N*12)
+
+	def __callg__(self,x, F, G, row, col, rec, needg):
+		cost = 0.0
+		if needg:
+			Gs = [0]*self.N*12
+			cols = []
+
+
+		for i in range(self.N -1):
+			for j in range(12):
+				q_dot_1 = x[i*(self.nX+self.nU+self.nP) + 18 + j]
+				q_dot_2 = x[(i+1)*(self.nX+self.nU+self.nP) + 18 + j]
+				cost += self.C*0.5*(q_dot_1-q_dot_2)**2
+				if needg:
+					cols.append(i*(self.nX+self.nU+self.nP) + 18 + j)
+					tmp = self.C*(q_dot_1-q_dot_2)
+					Gs[i*12+j] += tmp
+					Gs[(i+1)*12+j] -= tmp
+		if needg:
+			for j in range(12):
+				cols.append((self.N -1 )*(self.nX+self.nU+self.nP) + 18 + j)
+
+		F[:] = cost
+		if needg:
+			G[:] = Gs
+			if rec:
+				row[:] = [0]*self.N*12
+				col[:] = cols
+
+		return
+		
 
 #target velocity
 Q = np.zeros(30)
@@ -349,7 +389,7 @@ class periodicCost(NonLinearObj):
 		self.C = 0.1
 		global N
 		self.N = N
-		self.period = 60 #3s, 0.05dt, --- 60 interval
+		self.period = 30 #3s, 0.05dt, --- 60 interval
 		self.state_length = self.nX+self.nU+self.nP
 		NonLinearObj.__init__(self,nsol = self.N*(self.nX+self.nU+self.nP),nG = 12*self.N)
 
@@ -442,8 +482,10 @@ class periodicCost(NonLinearObj):
 #setting 21,24
 constr1 = anklePoseConstr()
 periodicCost = periodicCost()
+acclCost = accelerationCost()
 problem.add_lqr_obj(targetVelocityCost)
 problem.addNonLinearObj(periodicCost)
+problem.addNonLinearObj(acclCost)
 problem.addNonLinearPointConstr(constr1,path = True)
 
 #setting 23
@@ -492,7 +534,7 @@ print('preProcess took:',time.time() - startTime)
 #1003: algorithm. #4 is sqp
 #1004: how mu changes..
 ##debug information 1032
-options = {'1105':'run8.log','1014':1000,'1023':1e-3,'1016':2,'1033':0,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':4,\
+options = {'1105':'run11.log','1014':5000,'1023':1e-3,'1016':2,'1033':0,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':4,\
 	'history':True} #'1105':'run2.log','1047':'temp_files/',
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
@@ -543,8 +585,8 @@ slv = OptSolver(problem, cfg)
 # u_guess = np.load('results/PID_trajectory/4/u_history.npy')[200:2001]
 
 
-traj_guess = np.load('results/27/run2/solution_x401.npy')
-u_guess = np.load('results/27/run2/solution_u401.npy')
+traj_guess = np.load('results/27/run10/solution_x1001.npy')
+u_guess = np.load('results/27/run10/solution_u1001.npy')
 guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 
 
@@ -553,8 +595,8 @@ guess = problem.genGuessFromTraj(X= traj_guess, U= u_guess, t0 = 0, tf = tf)
 ###############################
 ###save initial guess        ##
 ###############################
-save_path = 'temp_files/'
-save_flag = True
+save_path = 'temp_files2/'
+save_flag = False
 if save_flag:
 	parsed_result = problem.parse_f(guess)
 	for key, value in parsed_result.items() :
@@ -591,7 +633,7 @@ startTime = time.time()
 
 ##setting for using Knitro
 rst = slv.solve_guess(guess)
-initial_i = 401
+initial_i = 1001
 i = initial_i
 for history in rst.history:
 	if (i%10 == 0):
@@ -611,15 +653,15 @@ for history in rst.history:
 	
 	i += 1
 
-i = i - initial_i
+i = i - initial_i -1 
 
 sol = problem.parse_sol((rst.history[i])['x'])
-np.save(save_path + 'solution_u'+str(i+initial_i)+'.npy',sol['u'])
-np.save(save_path + 'solution_x'+str(i+initial_i)+'.npy',sol['x'])
+np.save(save_path + 'solution_u'+str(i+initial_i + 1)+'.npy',sol['u'])
+np.save(save_path + 'solution_x'+str(i+initial_i+ 1)+'.npy',sol['x'])
 
 ### This saves everything from the optimizer
-np.save(save_path + 'knitro_obj'+str(i+initial_i)+'.npy',np.array(history['obj']))
-np.save(save_path + 'knitro_con'+str(i+initial_i)+'.npy',history['con'])
+np.save(save_path + 'knitro_obj'+str(i+initial_i + 1)+'.npy',np.array(history['obj']))
+np.save(save_path + 'knitro_con'+str(i+initial_i + 1)+'.npy',history['con'])
 
 print('Took', time.time() - startTime)
 print("========results=======")

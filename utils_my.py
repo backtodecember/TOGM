@@ -17,7 +17,7 @@ def trajectory_loader(start,end,dt,number):
 		start_walking  = 1.0
 		end_walking = 10.0
 		scale = round(dt/original_dt)
-		path = "results/PID_trajectory/8/"
+		path = "results/PID_trajectory/11/"
 		q_history = np.load(path + "q_history.npy")[200:2001]
 		q_dot_history = np.load(path + "q_dot_history.npy")[200:2001]
 		time_history = np.load(path + "time_history.npy")[200:2001]
@@ -61,10 +61,10 @@ def trajectory_loader(start,end,dt,number):
 		#print(time,q[0][0],q[-1][0])
 		
 
-		np.save('results/PID_trajectory/8/q_init_guess.npy',np.array(q))
-		np.save('results/PID_trajectory/8/q_dot_init_guess.npy',np.array(q_dot))
-		np.save('results/PID_trajectory/8/u_init_guess.npy',np.array(u))
-		np.save('results/PID_trajectory/8/time_init_guess.npy',np.array(time))
+		np.save('results/PID_trajectory/11/q_init_guess.npy',np.array(q))
+		np.save('results/PID_trajectory/11/q_dot_init_guess.npy',np.array(q_dot))
+		np.save('results/PID_trajectory/11/u_init_guess.npy',np.array(u))
+		np.save('results/PID_trajectory/11/time_init_guess.npy',np.array(time))
 
 
 		#print(len(q_history),len(u_history))

@@ -8,8 +8,13 @@ from copy import deepcopy
 import configs
 import matplotlib.pyplot as plt
 from klampt.math import vectorops as vo
+from pycubicspline import Spline2D
 from scipy.sparse import coo_matrix
 from robosimian_wrapper import robosimian
+from scipy.interpolate import CubicSpline
+
+global N
+N = 181
 def initialize():
 	from robosimian_GM_simulation import robosimianSimulator
 	#global robot
@@ -182,7 +187,185 @@ class anklePoseConstr():
 				Gs.append(partial_Jp[i,j-1])
 			G[:] = Gs
 
+def sp_predict(spx,spz,t):
+	out = []
+	xs = spx(t)
+	zs = spz(t)
+	for (x,z) in zip(xs,zs):
+		out.append(x)
+		out.append(z)
+	return np.array(out)
+
+def calculate_spline(control_pts,pred_indeces):
+	"""
+	Parameters:
+	--------------
+	control_pts: the 2D N control pts for the cubic spline. For N control pts, control_pts[0:N] are the x-values, control_pts[N:2N] are the z(y)-values
+	indeces: where we would like to calculate the values for on the spline
+
+	Return:
+	------------- 
+	pts: the predicted values on the spline, indicated by indeces
+	J: the Jacobian w.r.t the control pts
+	"""
+	n = int(len(control_pts)/2)
+	t = np.linspace(0,1,n)
+	spx = CubicSpline(t,control_pts[0:n])
+	spz = CubicSpline(t,control_pts[n:2*n])
+
+	#indeces_scaled = indeces*sp.s[-1]
+	out = sp_predict(spx,spz,pred_indeces)
+	J = np.zeros((2*len(pred_indeces),2*n))
+	eps = 1e-6			
+	for k in range(2*n):
+		add_vector = np.zeros(2*n)
+		add_vector[k] = eps
+		control_pts_tmp = control_pts + add_vector
+		spx_tmp = CubicSpline(t,control_pts_tmp[0:n])
+		spz_tmp = CubicSpline(t,control_pts_tmp[n:2*n])
+		out_tmp = sp_predict(spx_tmp,spz_tmp,pred_indeces)
+		J[:,k] = (out_tmp - out)/eps
+	return out,J
+
+
+
+
+class EESplineConstraint():
+	def __init__(self):
+		global N
+		self.gap = 5 #enforce constraint every 5 grid points
+		self.nX = 30
+		self.nU = 12
+		self.nP = 0
+		self.nAddX =  2*4*10
+		self.nc = int(8*((N-1)/self.gap+1)) #where the dynamics are enforced on the splines
+		self.nc_4 = int(2*((N-1)/self.gap+1))
+		self.state_length = N*(self.nX+self.nU+self.nP) 
+		self.robot = robosimian()
+		#the points at which the dynamics are enforced
+		self.mesh_indeces = np.linspace(0,1,int((N-1)/self.gap+1))
+		self.mesh_indeces_int = np.arange(0,N,self.gap)
+		self.linear_indeces = np.arange(0,int((N-1)/self.gap+1),1)
+
+	def __callg__(self,x):
+		#note that in x, the first chunk elements are the states and controls, and the last chunk is the spline parameters
+		state = x[0:self.state_length]
+		AddX =  x[self.state_length:self.state_length+self.nAddX]
+		#print(np.shape(x))
+		constr = np.zeros(self.nc)
+		Gs = []
+		cols = []
+		rows = []
+		needg = True
+
+
+		#calculate the splines
+		#print(x[0:42])
+		for i in range(4):
+			sp_values,sp_derivatives = calculate_spline(AddX[i*int(self.nAddX/4):(i+1)*int(self.nAddX/4)],self.mesh_indeces)
+			constr[i*self.nc_4:(i+1)*self.nc_4] = sp_values
+
+			# print('control pts:',AddX[i*int(self.nAddX/4):(i+1)*int(self.nAddX/4)])
+			# print(i)
+			# print('sp_values:',sp_values)
+
+			if needg:
+				for iter_row in range(self.nc_4):
+					for iter_col in range(int(self.nAddX/4)):
+						Gs.append(sp_derivatives[iter_row,iter_col])
+						rows.append(iter_row + i*self.nc_4)
+						cols.append(iter_col + self.state_length + i*int(self.nAddX/4))
+		fk_array = np.zeros(self.nc)
+		for (i,j) in zip(self.mesh_indeces_int,self.linear_indeces):
+			x_i = state[i*(self.nX+self.nU+self.nP):(i+1)*(self.nX+self.nU+self.nP)]
+			self.robot.set_q_2D_(x_i[0:15])
+			self.robot.set_q_dot_2D_(x_i[15:30])
+			p = self.robot.get_ankle_positions()
+			
+			fk_array[2*j:2*j+2] = np.array([p[0][0],p[0][1]])
+			fk_array[self.nc_4 + 2*j:self.nc_4 + 2*j+2] = np.array([p[1][0],p[1][1]])
+			fk_array[self.nc_4*2 + 2*j:self.nc_4*2 + 2*j+2] = np.array([p[2][0],p[2][1]])
+			fk_array[self.nc_4*3 + 2*j:self.nc_4*3 + 2*j+2] = np.array([p[3][0],p[3][1]])
+			if needg:
+				Jp = self.robot.compute_Jp_Partial2() #8 by 15
+				Gs = Gs + (-1.0*Jp[0,[0,1,2,3,4,5]]).tolist()
+				Gs = Gs + (-1.0*Jp[1,[0,1,2,3,4,5]]).tolist()
+				rows = rows + [j*2]*6 + [j*2 + 1]*6
+				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+3,\
+					i*(self.nX+self.nU+self.nP)+4,i*(self.nX+self.nU+self.nP)+5]*2
+
+				Gs = Gs + (-1.0*Jp[2,[0,1,2,6,7,8]]).tolist()
+				Gs = Gs + (-1.0*Jp[3,[0,1,2,6,7,8]]).tolist()
+				rows = rows + [j*2 + self.nc_4]*6 + [j*2 + 1 + self.nc_4]*6
+				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+6,\
+					i*(self.nX+self.nU+self.nP)+7,i*(self.nX+self.nU+self.nP)+8]*2
+
+				Gs = Gs + (-1.0*Jp[4,[0,1,2,9,10,11]]).tolist()
+				Gs = Gs + (-1.0*Jp[5,[0,1,2,9,10,11]]).tolist()
+				rows = rows + [j*2 + self.nc_4*2]*6 + [j*2 + 1 + self.nc_4*2]*6
+				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+9,\
+					i*(self.nX+self.nU+self.nP)+10,i*(self.nX+self.nU+self.nP)+11]*2
+				
+				Gs = Gs + (-1.0*Jp[6,[0,1,2,12,13,14]]).tolist()
+				Gs = Gs + (-1.0*Jp[7,[0,1,2,12,13,14]]).tolist()
+				rows = rows + [j*2 + self.nc_4*3]*6 + [j*2 + 1 + self.nc_4*3]*6
+				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+12,\
+					i*(self.nX+self.nU+self.nP)+13,i*(self.nX+self.nU+self.nP)+14]*2
+
+
+		print(len(Gs),len(cols),len(rows))
+		print('spline:',constr)
+		print('FK:',fk_array)
+		constr = constr - fk_array
+		print(constr)
+
+		start_time = time.time()
+		sJ = coo_matrix((Gs, (rows, cols)), shape=(self.nc,self.state_length+self.nAddX))
+		J = sJ.todense()
+		print('time elapsed:',time.time() - start_time)
+		# # F[:] = constr
+		# for i in range(4):
+		# 	sJ = coo_matrix(J[i*self.nc_4:(i+1)*self.nc_4])
+		# 	print(np.shape(sJ.row))
+		# col[:] = sJ.col
+		# G[:] = sJ.data
+
+		return
+
 if __name__=="__main__":
+	############
+	########Debug EE splines stuff
+	############
+	traj = np.hstack((np.load('results/PID_trajectory/4/q_init_guess.npy'),np.load('results/PID_trajectory/4/q_dot_init_guess.npy')))
+	u = np.load('results/PID_trajectory/4/u_init_guess.npy')
+
+	x = np.array([])
+	counter = 0
+	for i,j in zip(traj,u):
+		x = np.concatenate((x,i,j))
+		counter += 1
+		if counter >N -1 :
+			break
+	addX_guess = np.array([0.23579254920625653]*10 +  [-0.1334011528321084]*10 + [-0.258711560597295]*10 +  [-0.12993365949253063]*10 \
+		+ [-0.7714073484872508]*10 + [-0.11461216997819987]*10 +  [0.7483930622411774]*10 + [-0.10170425069417896]*10)
+
+	x = np.concatenate((x,addX_guess))
+	import time
+	constr = EESplineConstraint()
+	start_time = time.time()
+	constr.__callg__(x)
+	print('\n')
+	print('\n')
+	print('\n')
+	print("time elapsed:",time.time() - start_time)
+
+
+
+
+
+
+
+
 	##These are for debugging the dynamcis gradients
 
 	#x_new = vo.add(configs.q_staggered_limbs,[0.1,0.0,0.05,0.02,-0.03,-0.3,-0.1,0.15,-0.2,-0.3,0.25,-0.4,-0.07,0.2,-0.2])
@@ -320,5 +503,3 @@ if __name__=="__main__":
 	# print('Ankle Pose Constr:',knitro_con[5401:5401+181*8])
 	# print('Enough Translation Constr:',knitro_con[5401+181*8:5401+181*8+1])
 
-	raise Exception('xxx')
-	print('flag')

@@ -37,6 +37,7 @@ class robosimianSimulator:
 		self.dof = 15
 		self.integration = 'semi-Euler' #"semi-Euler"
 		self.profile_computation = False
+		self.D = 15
 		if self.dyn == 'own':
 			self.robot = robosimian(print_level = print_level, RL = RL)
 			self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
@@ -285,14 +286,15 @@ class robosimianSimulator:
 			#flip the axes back
 			a = self._own_to_diffne(q = a)
 			a = a[np.newaxis].T
+
 		if not continuous:
 			return a
 		else:
 			if self.dyn == 'own':
 				return a,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 			else:
-				self.q = self._own_to_diffne(q = np.array(qdqNext[0:15]))[np.newaxis].T
-				self.q_dot = self._own_to_diffne(q = np.array(qdqNext[15:30]))[np.newaxis].T
+				self.q = self._own_to_diffne(q = np.array(qdqNext[0:self.D]))[np.newaxis].T
+				self.q_dot = self._own_to_diffne(q = np.array(qdqNext[self.D:2*self.D]))[np.newaxis].T
 				return a,np.concatenate((self.q.ravel(),self.q_dot.ravel()))
 
 	def getStaticTorques(self,x):

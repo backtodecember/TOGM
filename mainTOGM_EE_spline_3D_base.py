@@ -12,8 +12,8 @@ from trajoptlib import OptConfig, OptSolver
 from trajoptlib.utility import show_sol
 from scipy.sparse import coo_matrix
 import math
-from robosimian_GM_simulation import robosimianSimulator
-from robosimian_wrapper import robosimian
+from robosimian_GM_simulation_3D_base import robosimianSimulator
+from robosimian_wrapper_3D_base import robosimian
 import pdb
 import configs
 from klampt.math import vectorops as vo
@@ -22,26 +22,26 @@ from scipy.interpolate import CubicSpline
 
 class Robosimian(System):
 	def __init__(self):
-		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
-		q_2D = np.array([0.0,1.02,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
+		System.__init__(self,nx=36,nu=12,np=0,ode='Euler')
+		q_2D = np.array([0.0,0.0,1.02,0.0,0.0,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
 	 		+[0.6+1.5708,0.0,-0.6])[np.newaxis].T
-		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
+		q_dot_2D = np.array([0.0]*18)[np.newaxis].T
 		dt = 0.05
 		#Test 14+ should have extraploation set to be True
 		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = dt,dyn = 'diffne', augmented = True, extrapolation = True, integrate_dt = dt)
 
 	def dyn(self,t,x,u,p=None):  
 		a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
-		return np.concatenate([x[15:30],a]) #1D numpy array
-		# return np.zeros(30)
+		return np.concatenate([x[18:36],a]) #1D numpy array
+		# return np.zeros(36)
 
 	def jac_dyn(self, t, x, u, p=None):
 		a,J_tmp = self.robot.getDynJac(x,u)
-		a = np.concatenate([x[15:30],np.ravel(a)])		
-		J = np.zeros((30,1+30+12))
-		J[:,1:43] = J_tmp
+		a = np.concatenate([x[18:36],np.ravel(a)])		
+		J = np.zeros((36,1+36+12))
+		J[:,1:49] = J_tmp
 		return a,J
-		# return np.zeros(30),np.zeros((30,43))
+		# return np.zeros(36),np.zeros((36,49))
 
 global N_of_control_pts
 N_of_control_pts = 30
@@ -71,7 +71,7 @@ N = 181 #9s trajectory 0.05
 t0 = 0.0
 tf = 0.05*(N-1)
 
-angle_spline_flag = False
+angle_spline_flag = True
 if angle_spline_flag:
 	EE = EESpline2()
 	problem = TrajOptProblem(sys,N,t0,tf,gradmode = True, addx = EE)
@@ -83,29 +83,29 @@ else:
 #Add state bounds          #
 ############################
 
-problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2,0.3] + [math.pi*1.5]*12 + [3]*15)]
+problem.xbd = [np.array([-0.2,-1.0,0.4,-0.3,-0.3,-0.3] + [-math.pi*1.5]*12 + [-3]*18),np.array([5,1.0,1.2,0.3,0.3,0.3] + [math.pi*1.5]*12 + [3]*18)]
 problem.ubd = [np.array([-300]*12),np.array([300]*12)]
-problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
-problem.xfbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
+problem.x0bd = [np.array([-0.05,-0.05,0.4,-0.3,-0.3,-0.3] + [-math.pi*1.5]*12 + [-2.0]*18),np.array([0.05,0.05,1.1,0.3,0.3,0.3] + [math.pi*1.5]*12 + [2.0]*18)]
+problem.xfbd = [np.array([-0.2,-0.2,0.4,-0.3,-0.3,-0.3] + [-math.pi]*12 + [-2]*18),np.array([5,0.2,1.1,0.3,0.3,0.3] + [math.pi]*12 + [2]*18)]
 
-
+##right now this is constraining the robot's ankles in the global coordinate, not the local contact coordinate
 class anklePoseConstr(NonLinearPointConstr):
 	def __init__(self):
-
 		lb = np.array([-0.3,-1.0,-0.3,-1.0,-0.3,-1.0,-0.3,-1.0])
 		ub = np.array([1.0]*8)
 		self.robot = robosimian()
-		NonLinearPointConstr.__init__(self,index = 0, nc = 8, nx = 30, nu = 12, np = 0 ,lb = lb, ub = ub, nG = 40)
+		NonLinearPointConstr.__init__(self,index = 0, nc = 8, nx = 36, nu = 12, np = 0 ,lb = lb, ub = ub, nG = 8*7) #torso z,3 angles, 3 limbs
 
 	def __callg__(self,x, F, G, row, col, rec, needg):
 		#first col of x is time
-		self.robot.set_q_2D_(x[1:16])
-		self.robot.set_q_dot_2D_(x[16:31])
+		self.robot.set_q_2D_(x[1:19])
+		self.robot.set_q_dot_2D_(x[19:37])
 		p = self.robot.get_ankle_positions()
 		F[:] = np.array([p[0][1],p[0][2],p[1][1],p[1][2],p[2][1],p[2][2],p[3][1],p[3][2]])
 		if needg:
-			r = [0]*5 + [1]*5 + [2]*5 + [3]*5 + [4]*5 + [5]*5 + [6]*5 + [7]*5 
-			c = [2,3,4,5,6] + [2,3,4,5,6] + [2,3,7,8,9] + [2,3,7,8,9] + [2,3,10,11,12] + [2,3,10,11,12] + [2,3,13,14,15] + [2,3,13,14,15]
+			r = [0]*7 + [1]*7 + [2]*7 + [3]*7 + [4]*7 + [5]*7 + [6]*7 + [7]*7 
+			c = [3,4,5,6,7,8,9] + [3,4,5,6,7,8,9] + [3,4,5,6,10,11,12] + [3,4,5,6,10,11,12] + \
+				[3,4,5,6,13,14,15] + [3,4,5,6,13,14,15] + [3,4,5,6,16,17,18] + [3,4,5,6,16,17,18]
 			if rec:
 				row[:] = r
 				col[:] = c
@@ -116,27 +116,35 @@ class anklePoseConstr(NonLinearPointConstr):
 			G[:] = Gs
 
 #target velocity
-Q = np.zeros(30)
+Q = np.zeros(36)
 Q[1] = 0.01 #0.01
 Q[2] = 0.01
-Q[15] = 10.0
-xbase = np.zeros(30)
-xbase[2] = 0.0
-xbase[1] = 0.75
-xbase[15] = 0.3
+Q[3] = 0.01
+Q[4] = 0.01
+Q[5] = 0.01
+Q[18] = 100.0
+xbase = np.zeros(36)
+xbase[1] = 0.0
+xbase[2] = 0.75
+xbase[3] = 0.0
+xbase[4] = 0.0
+xbase[5] = 0.0
+xbase[18] = 0.3
+
 R = np.ones(12)*0.00001  #0.00001
-targetVelocityCost = LqrObj(Q = Q,R=R,xbase = xbase)
+targetVelocityCost = LqrObj(Q = Q,xbase = xbase)
 
 #periodic cost
 class periodicCost(NonLinearObj):
 	def __init__(self):
 		global N_of_control_pts
-		self.nX = 30
+		self.nX = 36
 		self.nU = 12
 		self.nP = 0
 		self.C = 0.1
 		global N
 		self.N = N
+		self.first_joint = 6
 		self.period = 60 #3s, 0.05dt, --- 60 interval
 		self.state_length = self.nX+self.nU+self.nP
 		self.nAddX =  2*4*N_of_control_pts
@@ -145,8 +153,8 @@ class periodicCost(NonLinearObj):
 	def __callg__(self,x, F, G, row, col, rec, needg):
 		cost = 0.0
 		for i in range(self.N - self.period):
-			cost += np.linalg.norm(x[i*(self.state_length)+3:i*(self.state_length)+15] - \
-				x[(i+self.period)*(self.state_length)+3:(i+self.period)*(self.state_length)+15])**2
+			cost += np.linalg.norm(x[i*(self.state_length)+self.first_joint:i*(self.state_length)+self.first_joint+12] - \
+				x[(i+self.period)*(self.state_length)+self.first_joint:(i+self.period)*(self.state_length)+self.first_joint+12])**2
 			#not adding velocity because initial velocity is more bounded..
 			# cost += np.linalg.norm(x[i*(self.state_length)+18:i*(self.state_length)+30] - \
 			# 	x[(i+self.period)*(self.state_length)+18:(i+self.period)*(self.state_length)+30])**2
@@ -159,20 +167,20 @@ class periodicCost(NonLinearObj):
 			#add the first period entries
 			for i in range(self.period):
 				for j in range(12):
-					col_entries.append(i*self.state_length+3+j)
-					Gs.append((2.0*(x[i*self.state_length+3+j] - x[(i+self.period)*self.state_length+3+j]))*self.C)
+					col_entries.append(i*self.state_length+self.first_joint+j)
+					Gs.append((2.0*(x[i*self.state_length+self.first_joint+j] - x[(i+self.period)*self.state_length+self.first_joint+j]))*self.C)
 
 			for i in range(self.N - self.period*2):
 				for j in range(12):
 					iterator = i + self.period
-					col_entries.append(iterator*self.state_length+3+j)
-					Gs.append((2.0*(x[iterator*self.state_length+3+j] - x[(iterator+self.period)*self.state_length+3+j]) - \
-						2.0*(x[(iterator-self.period)*self.state_length+3+j] - x[iterator*self.state_length+3+j]))*self.C)
+					col_entries.append(iterator*self.state_length+self.first_joint+j)
+					Gs.append((2.0*(x[iterator*self.state_length+self.first_joint+j] - x[(iterator+self.period)*self.state_length+self.first_joint+j]) - \
+						2.0*(x[(iterator-self.period)*self.state_length+self.first_joint+j] - x[iterator*self.state_length+self.first_joint+j]))*self.C)
 			for i in range(self.period):
 				for j in range(12):
 					iterator = i + (self.N - self.period)
-					col_entries.append(iterator*self.state_length+3+j)
-					Gs.append((-2.0*(x[(iterator-self.period)*self.state_length+3+j] - x[iterator*self.state_length+3+j]))*self.C)			
+					col_entries.append(iterator*self.state_length+self.first_joint+j)
+					Gs.append((-2.0*(x[(iterator-self.period)*self.state_length+self.first_joint+j] - x[iterator*self.state_length+self.first_joint+j]))*self.C)			
 					
 			G[:] = Gs
 			if rec:
@@ -250,6 +258,7 @@ def calculate_spline2(control_pts,pred_indeces):
 		J[:,k] = (out_tmp - out)/eps
 	return out,J
 
+#this has not been modified
 class EESplineConstraint(NonLinearConstr):
 	def __init__(self):
 		global N,N_of_control_pts
@@ -347,7 +356,7 @@ class EESplineConstraint(NonLinearConstr):
 				row[:] = rows
 				col[:] = cols
 		return
-		
+#this has not been modified either	
 class EESplineCost(NonLinearObj):
 	def __init__(self):
 		global N
@@ -441,7 +450,7 @@ class AngleSplineConstraint(NonLinearConstr):
 	def __init__(self):
 		global N,N_of_control_pts
 		self.gap = 1 #enforce constraint every 5 grid points
-		self.nX = 30
+		self.nX = 36
 		self.nU = 12
 		self.nP = 0
 		self.nAddX =  4*N_of_control_pts
@@ -455,7 +464,9 @@ class AngleSplineConstraint(NonLinearConstr):
 		self.scale = 0.5
 
 		NonLinearConstr.__init__(self, nsol = self.state_length + self.nAddX,nc = self.nc,lb = np.zeros(self.nc), ub = np.zeros(self.nc), \
-			gradmode='user', nG =  26064 ) #nG is obtained directly from looking at Gs #7696 gap = 5 #11584 gap = 1 #18824 gap = 1,controlpts = 20 #26064,30 control pts
+			gradmode='user', nG =  28236 ) 
+		#nG is obtained directly from looking at Gs #7696 gap = 5 #11584 gap = 1 #18824 gap = 1,controlpts = 20 #26064,30 control pts
+		#28236 for 3D base 30 control pts
 
 	def __callg__(self,x, F, G, row, col, rec, needg):
 		#note that in x, the first chunk elements are the states and controls, and the last chunk is the spline parameters
@@ -470,7 +481,6 @@ class AngleSplineConstraint(NonLinearConstr):
 		for i in range(4):
 			sp_values,sp_derivatives = calculate_spline2(AddX[i*int(self.nAddX/4):(i+1)*int(self.nAddX/4)],self.mesh_indeces)
 			constr[i*self.nc_4:(i+1)*self.nc_4] = sp_values
-
 			if needg:
 				for iter_row in range(self.nc_4):
 					for iter_col in range(int(self.nAddX/4)):
@@ -481,8 +491,8 @@ class AngleSplineConstraint(NonLinearConstr):
 		fk_array = np.zeros(self.nc)
 		for (i,j) in zip(self.mesh_indeces_int,self.linear_indeces):
 			x_i = state[i*(self.nX+self.nU+self.nP):(i+1)*(self.nX+self.nU+self.nP)]
-			self.robot.set_q_2D_(x_i[0:15])
-			self.robot.set_q_dot_2D_(x_i[15:30])
+			self.robot.set_q_2D_(x_i[0:18])
+			self.robot.set_q_dot_2D_(x_i[18:36])
 			p = self.robot.get_ankle_positions()
 			
 			fk_array[j] = p[0][2]
@@ -491,26 +501,30 @@ class AngleSplineConstraint(NonLinearConstr):
 			fk_array[self.nc_4*3 + j] = p[3][2]
 
 			if needg:
-				Jp = self.robot.compute_Jp_Partial() #8 by 15
-				Gs = Gs + (-1.0*Jp[1,[0,1,2,3,4,5]]*self.scale).tolist()
-				rows = rows + [j]*6
+				Jp = self.robot.compute_Jp_Partial() #8 by 18
+				Gs = Gs + (-1.0*Jp[1,[0,1,2,3,4,5,6,7,8]]*self.scale).tolist()
+				rows = rows + [j]*9
 				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+3,\
-					i*(self.nX+self.nU+self.nP)+4,i*(self.nX+self.nU+self.nP)+5]
+					i*(self.nX+self.nU+self.nP)+4,i*(self.nX+self.nU+self.nP)+5,i*(self.nX+self.nU+self.nP)+6,i*(self.nX+self.nU+self.nP)+7,\
+					i*(self.nX+self.nU+self.nP)+8]
 
-				Gs = Gs + (-1.0*Jp[3,[0,1,2,6,7,8]]*self.scale).tolist()
-				rows = rows + [j + self.nc_4]*6
-				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+6,\
-					i*(self.nX+self.nU+self.nP)+7,i*(self.nX+self.nU+self.nP)+8]
+				Gs = Gs + (-1.0*Jp[3,[0,1,2,3,4,5,9,10,11]]*self.scale).tolist()
+				rows = rows + [j + self.nc_4]*9
+				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+3,\
+					i*(self.nX+self.nU+self.nP)+4,i*(self.nX+self.nU+self.nP)+5,i*(self.nX+self.nU+self.nP)+9,i*(self.nX+self.nU+self.nP)+10,\
+					i*(self.nX+self.nU+self.nP)+11]
 
-				Gs = Gs + (-1.0*Jp[5,[0,1,2,9,10,11]]*self.scale).tolist()
-				rows = rows + [j + self.nc_4*2]*6
-				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+9,\
-					i*(self.nX+self.nU+self.nP)+10,i*(self.nX+self.nU+self.nP)+11]
+				Gs = Gs + (-1.0*Jp[5,[0,1,2,3,4,5,12,13,14]]*self.scale).tolist()
+				rows = rows + [j + self.nc_4*2]*9
+				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+3,\
+					i*(self.nX+self.nU+self.nP)+4,i*(self.nX+self.nU+self.nP)+5,i*(self.nX+self.nU+self.nP)+12,i*(self.nX+self.nU+self.nP)+13,\
+					i*(self.nX+self.nU+self.nP)+14]
 				
-				Gs = Gs + (-1.0*Jp[7,[0,1,2,12,13,14]]*self.scale).tolist()
-				rows = rows + [j + self.nc_4*3]*6
-				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+12,\
-					i*(self.nX+self.nU+self.nP)+13,i*(self.nX+self.nU+self.nP)+14]
+				Gs = Gs + (-1.0*Jp[7,[0,1,2,3,4,5,15,16,17]]*self.scale).tolist()
+				rows = rows + [j + self.nc_4*3]*9
+				cols = cols + [i*(self.nX+self.nU+self.nP),i*(self.nX+self.nU+self.nP)+1,i*(self.nX+self.nU+self.nP)+2,i*(self.nX+self.nU+self.nP)+3,\
+					i*(self.nX+self.nU+self.nP)+4,i*(self.nX+self.nU+self.nP)+5,i*(self.nX+self.nU+self.nP)+15,i*(self.nX+self.nU+self.nP)+16,\
+					i*(self.nX+self.nU+self.nP)+17]
 
 		constr = (constr - fk_array)*self.scale
 		
@@ -528,6 +542,7 @@ class AngleSplineConstraint(NonLinearConstr):
 #set the problem constraints #
 ##############################
 
+
 #setting 21,24
 constr1 = anklePoseConstr()
 periodicCost = periodicCost()
@@ -541,7 +556,7 @@ if angle_spline_flag:
 else:
 	splineConstr = EESplineConstraint()
 	splineCost = EESplineCost()
-	# problem.addNonLinearObj(splineCost)
+	problem.addNonLinearObj(splineCost)
 	problem.addNonLinearConstr(splineConstr)
 
 ############################
@@ -555,7 +570,6 @@ startTime = time.time()
 #setting 19
 problem.pre_process(snopt_mode = False)
 print('preProcess took:',time.time() - startTime)
-
 
 ###############################
 ##Deriv Check debug##
@@ -581,7 +595,7 @@ print('preProcess took:',time.time() - startTime)
 #1004: how mu changes..
 ##debug information 1032
 
-options = {'1105':'run5.log','1014':1000,'1023':1e-3,'1016':2,'1033':0,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':4,\
+options = {'1105':'run3.log','1014':1000,'1023':1e-3,'1016':2,'1033':0,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':0,\
 	'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
@@ -592,8 +606,22 @@ slv = OptSolver(problem, cfg)
 ###############################
 
 #setting 21, run2 ,24
-traj_guess = np.hstack((np.load('results/PID_trajectory/9/q_init_guess.npy'),np.load('results/PID_trajectory/9/q_dot_init_guess.npy')))
-u_guess = np.load('results/PID_trajectory/9/u_init_guess.npy')
+No = 11
+traj_guess = np.hstack((np.load('results/PID_trajectory/'+str(No)+'/q_init_guess.npy'),np.load('results/PID_trajectory/'+str(No)+'/q_dot_init_guess.npy')))
+u_guess = np.load('results/PID_trajectory/'+str(No)+'/u_init_guess.npy')
+
+# q_guess = np.load('results/PID_trajectory/'+str(No)+'/q_init_guess.npy')
+# q_dot_guess = np.load('results/PID_trajectory/'+str(No)+'/q_dot_init_guess.npy')
+# q_guess_3D_base = []
+# q_dot_guess_3D_base = []
+# for i in range(N):
+# 	q_guess_3D_base.append( [q_guess[i,0]] + [0.0] + [q_guess[i,1]] + [0.0] +  [q_guess[i,2]] + [0.0] + q_guess[i,3:15].tolist())
+# 	q_dot_guess_3D_base.append( [q_dot_guess[i,0]] + [0.0] + [q_dot_guess[i,1]] + [0.0] +  [q_dot_guess[i,2]] + [0.0] + q_dot_guess[i,3:15].tolist())
+#traj_guess = np.hstack((np.array(q_guess_3D_base),np.array(q_dot_guess_3D_base)))
+#u_guess = np.load('results/PID_trajectory/'+str(No)+'/u_init_guess.npy')
+
+
+
 # u_guess = []
 # for i in range(N):
 # 	u_guess.append([0]*12)
@@ -603,7 +631,7 @@ u_guess = np.load('results/PID_trajectory/9/u_init_guess.npy')
 # 	traj_guess[i,1] += 0.2
 
 
-# addX_guess = [np.array([0.0]*4*N_of_control_pts)]
+addX_guess = [np.array([0.0]*4*N_of_control_pts)]
 
 # angle_list = []
 # for i in range(N_of_control_pts):
@@ -616,9 +644,9 @@ u_guess = np.load('results/PID_trajectory/9/u_init_guess.npy')
 # addX_guess = [np.array([0.235792]*10 +  [-0.133401]*10 + [-0.258711]*10 +  [-0.129933]*10 \
 # 	+ [-0.771407]*10 + [-0.114612]*10 +  [0.748393]*10 +[-0.101704]*10)]
 
-addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,N_of_control_pts).tolist() +  [-0.133401]*N_of_control_pts \
-	+ np.linspace(-0.258711,-0.258711+2.7,N_of_control_pts).tolist() + [-0.129933]*N_of_control_pts + np.linspace(-0.771407,-0.771407+2.7,N_of_control_pts).tolist() + [-0.114612]*N_of_control_pts \
-	+ np.linspace(0.748393,0.748393+2.7,N_of_control_pts).tolist() +[-0.101704]*N_of_control_pts)]
+# addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,N_of_control_pts).tolist() +  [-0.133401]*N_of_control_pts \
+# 	+ np.linspace(-0.258711,-0.258711+2.7,N_of_control_pts).tolist() + [-0.129933]*N_of_control_pts + np.linspace(-0.771407,-0.771407+2.7,N_of_control_pts).tolist() + [-0.114612]*N_of_control_pts \
+# 	+ np.linspace(0.748393,0.748393+2.7,N_of_control_pts).tolist() +[-0.101704]*N_of_control_pts)]
 
 # addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,10).tolist() +  \
 # 	[-0.133401] + [-0.133401+ 0.2*math.sin(math.pi/1.5*1.0),-0.133401,-0.133401]*3 \
@@ -651,7 +679,7 @@ guess = problem.genGuessFromTraj(X= traj_guess[0:N,:], U= u_guess[0:N,:], addx =
 ###############################
 ###save initial guess        ##
 ###############################
-save_path = 'temp_files5/'
+save_path = 'temp_files3/'
 save_flag = True
 if save_flag:
 	parsed_result = problem.parse_f(guess)
