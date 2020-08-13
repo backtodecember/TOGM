@@ -71,7 +71,7 @@ N = 181 #9s trajectory 0.05
 t0 = 0.0
 tf = 0.05*(N-1)
 
-angle_spline_flag = False
+angle_spline_flag = True
 if angle_spline_flag:
 	EE = EESpline2()
 	problem = TrajOptProblem(sys,N,t0,tf,gradmode = True, addx = EE)
@@ -115,22 +115,10 @@ class anklePoseConstr(NonLinearPointConstr):
 				Gs.append(partial_Jp[i,j-1])
 			G[:] = Gs
 
-#target velocity
-Q = np.zeros(30)
-Q[1] = 0.01 #0.01
-Q[2] = 0.01
-Q[15] = 10.0
-xbase = np.zeros(30)
-xbase[2] = 0.0
-xbase[1] = 0.75
-xbase[15] = 0.3
-R = np.ones(12)*0.00001  #0.00001
-targetVelocityCost = LqrObj(Q = Q,R=R,xbase = xbase)
-
 #periodic cost
 class periodicCost(NonLinearObj):
 	def __init__(self):
-		global N_of_control_pts
+		global N_of_control_pts,angle_spline_flag
 		self.nX = 30
 		self.nU = 12
 		self.nP = 0
@@ -139,7 +127,10 @@ class periodicCost(NonLinearObj):
 		self.N = N
 		self.period = 60 #3s, 0.05dt, --- 60 interval
 		self.state_length = self.nX+self.nU+self.nP
-		self.nAddX =  2*4*N_of_control_pts
+		if angle_spline_flag:
+			self.nAddX =  4*N_of_control_pts
+		else:
+			self.nAddX =  2*4*N_of_control_pts
 		NonLinearObj.__init__(self,nsol = self.N*(self.nX+self.nU+self.nP) + self.nAddX ,nG = 12*self.N)
 
 	def __callg__(self,x, F, G, row, col, rec, needg):
@@ -452,7 +443,7 @@ class AngleSplineConstraint(NonLinearConstr):
 		self.mesh_indeces = np.linspace(0,1,int((N-1)/self.gap+1))
 		self.mesh_indeces_int = np.arange(0,N,self.gap)
 		self.linear_indeces = np.arange(0,int((N-1)/self.gap+1),1)
-		self.scale = 0.5
+		self.scale = 0.25
 
 		NonLinearConstr.__init__(self, nsol = self.state_length + self.nAddX,nc = self.nc,lb = np.zeros(self.nc), ub = np.zeros(self.nc), \
 			gradmode='user', nG =  26064 ) #nG is obtained directly from looking at Gs #7696 gap = 5 #11584 gap = 1 #18824 gap = 1,controlpts = 20 #26064,30 control pts
@@ -522,7 +513,17 @@ class AngleSplineConstraint(NonLinearConstr):
 				col[:] = cols
 		return
 
-
+#target velocity
+Q = np.zeros(30)
+Q[1] = 0.01 #0.01
+Q[2] = 0.01
+Q[15] = 100.0
+xbase = np.zeros(30)
+xbase[2] = 0.0
+xbase[1] = 0.75
+xbase[15] = 0.4
+R = np.ones(12)*0.00001  #0.00001
+targetVelocityCost = LqrObj(Q = Q,R=R,xbase = xbase)
 
 ##############################
 #set the problem constraints #
@@ -540,7 +541,7 @@ if angle_spline_flag:
 	problem.addNonLinearConstr(splineConstr)
 else:
 	splineConstr = EESplineConstraint()
-	splineCost = EESplineCost()
+	#splineCost = EESplineCost()
 	# problem.addNonLinearObj(splineCost)
 	problem.addNonLinearConstr(splineConstr)
 
@@ -581,7 +582,7 @@ print('preProcess took:',time.time() - startTime)
 #1004: how mu changes..
 ##debug information 1032
 
-options = {'1105':'run5.log','1014':1000,'1023':1e-3,'1016':2,'1033':0,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':4,\
+options = {'1105':'run19.log','1014':1000,'1023':1e-3,'1016':2,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':4,\
 	'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
@@ -592,8 +593,10 @@ slv = OptSolver(problem, cfg)
 ###############################
 
 #setting 21, run2 ,24
-traj_guess = np.hstack((np.load('results/PID_trajectory/9/q_init_guess.npy'),np.load('results/PID_trajectory/9/q_dot_init_guess.npy')))
-u_guess = np.load('results/PID_trajectory/9/u_init_guess.npy')
+path = 'results/PID_trajectory/13/'
+traj_guess = np.hstack((np.load(path + 'q_init_guess.npy'),np.load(path + 'q_dot_init_guess.npy')))
+u_guess = np.load(path + 'u_init_guess.npy')
+
 # u_guess = []
 # for i in range(N):
 # 	u_guess.append([0]*12)
@@ -603,7 +606,7 @@ u_guess = np.load('results/PID_trajectory/9/u_init_guess.npy')
 # 	traj_guess[i,1] += 0.2
 
 
-# addX_guess = [np.array([0.0]*4*N_of_control_pts)]
+addX_guess = [np.array([0.0]*4*N_of_control_pts)]
 
 # angle_list = []
 # for i in range(N_of_control_pts):
@@ -611,14 +614,14 @@ u_guess = np.load('results/PID_trajectory/9/u_init_guess.npy')
 # print(angle_list)
 # addX_guess = [np.array(angle_list*4)]
 
+# addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,N_of_control_pts).tolist() +  [-0.133401]*N_of_control_pts \
+# 	+ np.linspace(-0.258711,-0.258711+2.7,N_of_control_pts).tolist() + [-0.129933]*N_of_control_pts + np.linspace(-0.771407,-0.771407+2.7,N_of_control_pts).tolist() + [-0.114612]*N_of_control_pts \
+# 	+ np.linspace(0.748393,0.748393+2.7,N_of_control_pts).tolist() +[-0.101704]*N_of_control_pts)]
 
-## below are for 10 control pts, and x,z control pts
+
+# below are for 10 control pts, and x,z control pts
 # addX_guess = [np.array([0.235792]*10 +  [-0.133401]*10 + [-0.258711]*10 +  [-0.129933]*10 \
 # 	+ [-0.771407]*10 + [-0.114612]*10 +  [0.748393]*10 +[-0.101704]*10)]
-
-addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,N_of_control_pts).tolist() +  [-0.133401]*N_of_control_pts \
-	+ np.linspace(-0.258711,-0.258711+2.7,N_of_control_pts).tolist() + [-0.129933]*N_of_control_pts + np.linspace(-0.771407,-0.771407+2.7,N_of_control_pts).tolist() + [-0.114612]*N_of_control_pts \
-	+ np.linspace(0.748393,0.748393+2.7,N_of_control_pts).tolist() +[-0.101704]*N_of_control_pts)]
 
 # addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,10).tolist() +  \
 # 	[-0.133401] + [-0.133401+ 0.2*math.sin(math.pi/1.5*1.0),-0.133401,-0.133401]*3 \
@@ -640,18 +643,20 @@ addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,N_of_control_pts).toli
 # 	+[-0.101704]+ [-0.101704,-0.101704 + 0.3*math.sin(math.pi/1.5*1.0),-0.101704]*3)]
 
 
-# traj_guess = np.load('results/28/run18/solution_x120.npy')
-# u_guess = np.load('results/28/run18/solution_u120.npy')
-# addX_guess = np.load('results/28/run18/solution_addx120.npy')
+# traj_guess = np.load('results/32/run17/solution_x171.npy')
+# u_guess = np.load('results/32/run17/solution_u171.npy')
+# addX_guess = np.load('results/32/run17/solution_addx171.npy')
+
 guess = problem.genGuessFromTraj(X= traj_guess[0:N,:], U= u_guess[0:N,:], addx = addX_guess, t0 = 0, tf = tf)
 
+# guess = problem.genGuessFromTraj(X= traj_guess[0:N,:], U= u_guess[0:N,:],t0 = 0, tf = tf)
 
 
 
 ###############################
 ###save initial guess        ##
 ###############################
-save_path = 'temp_files5/'
+save_path = 'temp_files19/'
 save_flag = True
 if save_flag:
 	parsed_result = problem.parse_f(guess)
