@@ -2,7 +2,7 @@ import numpy as np
 import math
 from scipy.interpolate import CubicSpline
 
-pts = [(-3,0),(-2,0),(-1,0),(-0.5,0),(0,0),(0.25,0.1),(0.5,0),(0.75,-0.06),(1,0),(1.7,0.2),(2.0,0.16),(2.2,0.13),(2.7,0.25),(3.5,0.22),(6,0),(10,0)]
+pts = [(-3,0),(-2,0),(-1,0),(-0.5,0),(0,0.02),(0.25,0.1),(0.5,0.16),(1.7,-0.25),(2.0,-0.3),(2.7,-0.05),(3.5,0.4),(6,0),(10,0),(12,0)]
 t = []
 control_pts = []
 for pt in pts:
@@ -35,17 +35,22 @@ def fz(x,y,No):
 
 start = -3
 stop = 12
-res = 0.01
+res = 0.02
 xs = np.linspace(start,stop,int((stop-start)/res)+1)
-ys = np.linspace(-1,1,int(2/0.2)+1)
+ys = np.linspace(-1,1,int(2/res)+1)
 
 for No in [5]:
-    with open('terrain'+str(No)+'_lowres.txt','w') as f:
-        for x in xs:
-            for y in ys:
-                f.write(str(x)+' '+str(y)+' '+str(fz(x,y,No))+'\n')
+    with open('terrain'+str(No)+'.txt','w') as f:
+        # for x in xs:
+        #     for y in ys:
+        #         f.write(str(x)+' '+str(y)+' '+str(fz(x,y,No))+'\n')
 
-# pts = [(-3,0),(-2,0),(-1,0),(-0.5,0),(0,0),(0.25,0.1),(0.5,0),(0.75,-0.06),(1,0),(1.7,0.2),(2.0,0.16),(2.2,0.13),(2.7,0.25),(3.5,0.22),(6,0),(10,0)]
+        with open('terrain'+str(No)+'.xyz','w') as f:
+            for x in xs:
+                for y in ys:
+                    f.write(str(x)+' '+str(y)+' '+str(fz(x,y,No))+'\n')
+                    f.write(str(x)+' '+str(y)+' '+str(fz(x,y,No)-0.02)+'\n')
+# pts = [(-3,0),(-2,0),(-1,0),(-0.5,0),(0,0.02),(0.25,0.1),(0.5,0.16),(1.7,-0.25),(2.0,-0.3),(2.7,-0.05),(3.5,0.4),(6,0),(10,0),(12,0)]
 # t = []
 # control_pts = []
 # for pt in pts:

@@ -20,6 +20,14 @@ from klampt.math import vectorops as vo
 import copy
 from scipy.interpolate import CubicSpline
 
+#Parameters:
+global N_of_control_pts
+N_of_control_pts = 30
+global N
+N = 181 #9s trajectory 0.05
+terrain = 0
+
+
 class Robosimian(System):
 	def __init__(self):
 		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
@@ -43,9 +51,6 @@ class Robosimian(System):
 		return a,J
 		# return np.zeros(30),np.zeros((30,43))
 
-global N_of_control_pts
-N_of_control_pts = 30
-
 class EESpline(AddX):
 	def __init__(self):
 		global N_of_control_pts
@@ -61,13 +66,13 @@ class EESpline2(AddX):
 		self.lb = np.array(([-1.0]*N_of_control_pts)*4)
 		self.ub = np.array(([1.0]*N_of_control_pts)*4)
 		AddX.__init__(self, n = self.n, lb = self.lb, ub = self.ub)
+
+
 ############################
 #Initialize the problem    #
 ############################
 
 sys = Robosimian()
-global N
-N = 181 #9s trajectory 0.05
 t0 = 0.0
 tf = 0.05*(N-1)
 
@@ -82,16 +87,17 @@ else:
 ############################
 #Add state bounds          #
 ############################
+#TODO: Add other terrains
+if terrain == 0:
+	problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2,0.3] + [math.pi*1.5]*12 + [3]*15)]
+	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
+	problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
 
-problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2,0.3] + [math.pi*1.5]*12 + [3]*15)]
-problem.ubd = [np.array([-300]*12),np.array([300]*12)]
-problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
-problem.xfbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
-
-
+#TODO: add different terrains
 class anklePoseConstr(NonLinearPointConstr):
-	def __init__(self):
-
+	def __init__(self,terrain = 0):
+		self.terrain = terrain
 		lb = np.array([-0.3,-1.0,-0.3,-1.0,-0.3,-1.0,-0.3,-1.0])
 		ub = np.array([1.0]*8)
 		self.robot = robosimian()
@@ -115,14 +121,13 @@ class anklePoseConstr(NonLinearPointConstr):
 				Gs.append(partial_Jp[i,j-1])
 			G[:] = Gs
 
-#periodic cost
 class periodicCost(NonLinearObj):
-	def __init__(self):
+	def __init__(self,C = 0.1, N = 60):
 		global N_of_control_pts,angle_spline_flag
 		self.nX = 30
 		self.nU = 12
 		self.nP = 0
-		self.C = 0.1
+		self.C = C
 		global N
 		self.N = N
 		self.period = 60 #3s, 0.05dt, --- 60 interval
@@ -429,7 +434,7 @@ class EESplineCost(NonLinearObj):
 		return
 
 class AngleSplineConstraint(NonLinearConstr):
-	def __init__(self):
+	def __init__(self,scale = 0.5):
 		global N,N_of_control_pts
 		self.gap = 1 #enforce constraint every 5 grid points
 		self.nX = 30
@@ -443,7 +448,7 @@ class AngleSplineConstraint(NonLinearConstr):
 		self.mesh_indeces = np.linspace(0,1,int((N-1)/self.gap+1))
 		self.mesh_indeces_int = np.arange(0,N,self.gap)
 		self.linear_indeces = np.arange(0,int((N-1)/self.gap+1),1)
-		self.scale = 0.25
+		self.scale = scale
 
 		NonLinearConstr.__init__(self, nsol = self.state_length + self.nAddX,nc = self.nc,lb = np.zeros(self.nc), ub = np.zeros(self.nc), \
 			gradmode='user', nG =  26064 ) #nG is obtained directly from looking at Gs #7696 gap = 5 #11584 gap = 1 #18824 gap = 1,controlpts = 20 #26064,30 control pts
@@ -513,16 +518,24 @@ class AngleSplineConstraint(NonLinearConstr):
 				col[:] = cols
 		return
 
-#target velocity
-Q = np.zeros(30)
-Q[1] = 0.01 #0.01
-Q[2] = 0.01
-Q[15] = 100.0
-xbase = np.zeros(30)
-xbase[2] = 0.0
-xbase[1] = 0.75
-xbase[15] = 0.4
-R = np.ones(12)*0.00001  #0.00001
+#TODO: implemented this, for "sand dome" terrain 
+class terrainLQRCost(NonLinearObj):
+	def __init__(self):
+		pass
+
+#TODO: add other terrains
+if terrain == 0:
+	#LQR, flat terain
+	Q = np.zeros(30)
+	Q[1] = 0.01 #0.01
+	Q[2] = 0.01
+	Q[15] = 100.0
+	xbase = np.zeros(30)
+	xbase[2] = 0.0
+	xbase[1] = 0.75
+	xbase[15] = 0.4
+	R = np.ones(12)*0.00001  #0.00001
+
 targetVelocityCost = LqrObj(Q = Q,R=R,xbase = xbase)
 
 ##############################
@@ -531,13 +544,13 @@ targetVelocityCost = LqrObj(Q = Q,R=R,xbase = xbase)
 
 #setting 21,24
 constr1 = anklePoseConstr()
-periodicCost = periodicCost()
+periodicCost = periodicCost(C = 0.1,N = 60)
 problem.add_lqr_obj(targetVelocityCost)
 problem.addNonLinearObj(periodicCost)
 problem.addNonLinearPointConstr(constr1,path = True)
 
 if angle_spline_flag:
-	splineConstr = AngleSplineConstraint()
+	splineConstr = AngleSplineConstraint(scale = 0.5)
 	problem.addNonLinearConstr(splineConstr)
 else:
 	splineConstr = EESplineConstraint()
@@ -550,10 +563,6 @@ else:
 ############################
 
 startTime = time.time()
-
-#setting before 191
-# problem.preProcess()
-#setting 19
 problem.pre_process(snopt_mode = False)
 print('preProcess took:',time.time() - startTime)
 
@@ -563,8 +572,6 @@ print('preProcess took:',time.time() - startTime)
 ###############################
 # cfg = OptConfig(backend='ipopt', print_file='temp_files2/tmp.out', print_level = 5, opt_tol = 1e-4, fea_tol = 1e-4, major_iter = 2,deriv_check = True)
 # slv = OptSolver(problem, cfg)
-
-
 
 ###############################
 ##Optimizer parameter setting##
@@ -582,7 +589,8 @@ print('preProcess took:',time.time() - startTime)
 #1004: how mu changes..
 ##debug information 1032
 
-options = {'1105':'run19.log','1014':1000,'1023':1e-3,'1016':2,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':4,\
+run = '19'
+options = {'1105':'run'+run+'.log','1014':1000,'1023':1e-3,'1016':2,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':4,\
 	'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
@@ -656,7 +664,7 @@ guess = problem.genGuessFromTraj(X= traj_guess[0:N,:], U= u_guess[0:N,:], addx =
 ###############################
 ###save initial guess        ##
 ###############################
-save_path = 'temp_files19/'
+save_path = 'run'+run+'/'
 save_flag = True
 if save_flag:
 	parsed_result = problem.parse_f(guess)

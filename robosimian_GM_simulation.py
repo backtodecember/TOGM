@@ -26,7 +26,7 @@ import pickle
 
 class robosimianSimulator:
 	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01,dyn = 'own',print_level = 0, \
-		augmented = True, RL = False, extrapolation = False, integrate_dt = 0.01):
+		augmented = True, RL = False, extrapolation = False, integrate_dt = 0.01,terrain = 0):
 		self.dyn = dyn
 		self.q = q
 		self.q_dot = q_dot
@@ -38,8 +38,12 @@ class robosimianSimulator:
 		self.integration = 'semi-Euler' #"semi-Euler"
 		self.profile_computation = False
 		self.D = 15
+		self.terrain = terrain
 		if self.dyn == 'own':
-			self.robot = robosimian(print_level = print_level, RL = RL)
+			if terrain > 0:
+				print("other terrains for own dynamics are not implemented yet")
+				exit()
+			self.robot = robosimian(print_level = print_level, RL = RL, terrain = self.terrain)
 			self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
 			self.compute_pool = mp.Pool(4)
 			#parameters for doing sensitivity analysis
@@ -104,8 +108,9 @@ class robosimianSimulator:
 			self.dhx = np.zeros((120,self.Dx+self.Du))
 
 		elif self.dyn == 'diffne':
+			#TODO:change different terrains
+
 			world = klampt.WorldModel()
-			#TODO, change collision mesh size
 			self.robot =  DiffNERobotModel(world,"Robosimian/robosimian_caesar_new_all_active.urdf",use2DBase=True)
 			#specify fixed joints
 			unusedJoints=["limb1_link0","limb1_link1","limb1_link3","limb1_link5","limb1_link7",
@@ -673,10 +678,18 @@ class robosimianSimulator:
 		return x_traj
 	
 	def getWorld(self):
-		return self.robot.get_world()
+		if self.dyn == 'own':
+			return self.robot.get_world()
+		else:
+			print('only available for own dynamics')
+
 
 	def getRobot(self):
-		return self.robot
+		if self.dyn == 'own':
+			return self.robot
+		else:
+			print('only available for own dynamics')
+
 
 	def debugSimulation(self):
 		world = self.robot.get_world()
@@ -690,26 +703,6 @@ class robosimianSimulator:
 			vis.unlock()
 			time.sleep(0.1)
 		vis.kill()
-
-	# def debugSimulationTraj(self,qs,dt = 0.1):
-	# 	"""
-	# 	qs: a list of configurations
-	# 	"""
-
-	# 	world = self.robot.get_world()
-	# 	vis.add("world",world)
-	# 	vis.show()
-
-	# 	vis.show()
-	# 	for q in qs:
-	# 		vis.lock()
-	# 		self.reset(np.array(q))
-	# 		vis.unlock()
-	# 		time.sleep(dt)
-
-	# 	while vis.shown():
-	# 		time.sleep(dt)
-	# 	vis.kill()
 
 	def reset(self,q,q_dot = np.array([0]*15)):
 		"""
@@ -811,6 +804,8 @@ class robosimianSimulator:
 		return dadx
 
 	def generateContacts(self):
+		#TODO: add different terrains here
+
 		##How to generate contact on a curved surface needs a bit more thoughts/care
 		"""Right not do not handle the case where a rigid body's angle is > pi/2.."""
 
@@ -828,19 +823,6 @@ class robosimianSimulator:
 			if self.RL:
 				self.ankle_poses[i*2,0] = p[1]
 				self.ankle_poses[i*2+1,0] = p[2]
-			# flag = False 
-			# if p[1] < self.terrain.material_range[0]:
-			# 	#p[1] = self.terrain.material_range[0]
-			# 	flag= True
-			# if p[2] > self.terrain.material_range[1]:
-			# 	#p[2] = self.terrain.material_range[1]
-			# 	flag = True
-			# if p[2] <  -self.terrain.material_range[1]:
-			# 	#p[2] = -self.terrain.material_range[1]
-			# 	flag = True
-			# if flag:
-			# 	print('One of more ankles are penetrating the terrain outside of database range,using extrapolation')
-			#if p[1] <= 0:
 			#even of not contact, still give a contact force 
 			if p[2] >= 0:
 				contact = [p[1],p[2],1,i,0] #the last element doesn't really mean anything, it's from the matlab program...

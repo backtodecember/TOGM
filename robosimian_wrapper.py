@@ -6,14 +6,9 @@ import numpy as np
 import math
 
 class robosimian:
-	def __init__(self,dt = 0.01,print_level = 0, RL = False):
-		self.world = WorldModel()
-		####The 2D version has all but 12 joints fixed....
-		self.world.loadElement("data/robosimian_caesar_new_2D.urdf")
-		self.robot = self.world.robot(0)  ##Is this robot actually used????
-
+	def __init__(self,dt = 0.01,print_level = 0, RL = False, terrain = 0):
 		self.world_all_active = WorldModel()
-		self.world_all_active.readFile("data/robosimian_2D_all_active_world.xml") 
+		self.world_all_active.readFile("data/robosimian_world_" + str(terrain) + ".xml") 
 		self.robot_all_active = self.world_all_active.robot(0)
 
 		self.fixed_joint_indicies = [1,3,5,6,7,9,11,13,14,15,17,19,21,22,23,25,27,29,30,31,33,35,37]
@@ -30,7 +25,7 @@ class robosimian:
 		# ####link 7-13 RF; 15-21 RR; 23-29 LR; 31-37 LF
 		self.dt = dt
 		self.print_level = print_level
-
+		self.terrain = terrain
 
 		desired_total_mass = 99.888 #99.888 is the original total mass
 		total_mass = 0.0
