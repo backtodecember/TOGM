@@ -88,19 +88,35 @@ else:
 #Add state bounds          #
 ############################
 #TODO: Add other terrains
+degree10 = math.pi*10.0/180.0
+degree20 = math.pi*10.0/180.0
+self.tana = math.tan(degree10)
+self.cosa = math.cos(degree10)
 if terrain == 0:
 	problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2,0.3] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
 	problem.x0bd = [np.array([-0.05,0.4,-0.3] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
 	problem.xfbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
 
-#TODO: add different terrains
+elif terrain == 1:
+	#This is assuming that the target speed of the torso is 0.4m/s on the slope
+	problem.xbd = [np.array([-0.2,0.4,-0.3-degree10] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 + math.sin(degree10)*3.6,0.3-degree10] + [math.pi*1.5]*12 + [3]*15)]
+	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
+	problem.x0bd = [np.array([-0.05,0.4,-0.3-degree10] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree10)*3.6,-0.3-degree10] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree10)*3.6,0.3-degree10] + \
+		[math.pi]*12 + [2]*15)]
+
+#TODO: add terrain 5
 class anklePoseConstr(NonLinearPointConstr):
 	def __init__(self,terrain = 0):
 		self.terrain = terrain
 		lb = np.array([-0.3,-1.0,-0.3,-1.0,-0.3,-1.0,-0.3,-1.0])
 		ub = np.array([1.0]*8)
 		self.robot = robosimian()
+		self.terrain > 0 and self.terrain < 5:
+			if self.terrain == 1:
+				self.tana = tan10
+				self.cosa = cos10
 		NonLinearPointConstr.__init__(self,index = 0, nc = 8, nx = 30, nu = 12, np = 0 ,lb = lb, ub = ub, nG = 40)
 
 	def __callg__(self,x, F, G, row, col, rec, needg):
@@ -108,18 +124,41 @@ class anklePoseConstr(NonLinearPointConstr):
 		self.robot.set_q_2D_(x[1:16])
 		self.robot.set_q_dot_2D_(x[16:31])
 		p = self.robot.get_ankle_positions()
-		F[:] = np.array([p[0][1],p[0][2],p[1][1],p[1][2],p[2][1],p[2][2],p[3][1],p[3][2]])
-		if needg:
-			r = [0]*5 + [1]*5 + [2]*5 + [3]*5 + [4]*5 + [5]*5 + [6]*5 + [7]*5 
-			c = [2,3,4,5,6] + [2,3,4,5,6] + [2,3,7,8,9] + [2,3,7,8,9] + [2,3,10,11,12] + [2,3,10,11,12] + [2,3,13,14,15] + [2,3,13,14,15]
-			if rec:
-				row[:] = r
-				col[:] = c
-			partial_Jp = self.robot.compute_Jp_Partial()
-			Gs = []
-			for (i,j) in zip(r,c):
-				Gs.append(partial_Jp[i,j-1])
-			G[:] = Gs
+
+		if self.terrain == 0:
+			F[:] = np.array([p[0][1],p[0][2],p[1][1],p[1][2],p[2][1],p[2][2],p[3][1],p[3][2]])
+			if needg:
+				r = [0]*5 + [1]*5 + [2]*5 + [3]*5 + [4]*5 + [5]*5 + [6]*5 + [7]*5 
+				c = [2,3,4,5,6] + [2,3,4,5,6] + [2,3,7,8,9] + [2,3,7,8,9] + [2,3,10,11,12] + [2,3,10,11,12] + [2,3,13,14,15] + [2,3,13,14,15]
+				if rec:
+					row[:] = r
+					col[:] = c
+				partial_Jp = self.robot.compute_Jp_Partial()
+				Gs = []
+				for (i,j) in zip(r,c):
+					Gs.append(partial_Jp[i,j-1])
+				G[:] = Gs
+		elif self.terrain > 0 and self.terrain < 5:
+			F[:] = np.array([(-self.tana*p[0][0] + p[0][1])*self.cosa,p[0][2]+degree10,\
+				(-self.tana*p[1][0] + p[1][1])*self.cosa,p[1][2]+degree10,\
+				(-self.tana*p[2][0] + p[2][1])*self.cosa,p[2][2]+degree10,\
+				(-self.tana*p[3][0] + p[3][1])*self.cosa,p[3][2]+degree10])
+			if needg:
+				r = [0]*6 + [1]*6 + [2]*6 + [3]*6 + [4]*6 + [5]*6 + [6]*6 + [7]*6
+				c = [1,2,3,4,5,6] + [1,2,3,4,5,6] + [1,2,3,7,8,9] + [1,2,3,7,8,9] + [1,2,3,10,11,12] + [1,2,3,10,11,12] + [1,2,3,13,14,15] + [1,2,3,13,14,15]
+				if rec:
+					row[:] = r
+					col[:] = c
+				partial_Jp = self.robot.compute_Jp_Partial3()
+				Gs = []
+				for (i,j) in zip(r,c):
+					if i%2 == 0:
+						limb = int(i/2)
+						Gs.append(self.cosa*partial_Jp[limb*3+1,j-1] - self.tana*self.cosa*partial_Jp[limb*3+0,j-1])
+					else:
+						limb = int((i-1)/2)
+						Gs.append(partial_Jp[limb*3+2,j-1])
+				G[:] = Gs
 
 class periodicCost(NonLinearObj):
 	def __init__(self,C = 0.1, N = 60):
@@ -523,6 +562,20 @@ class terrainLQRCost(NonLinearObj):
 	def __init__(self):
 		pass
 
+class terrainHeightCost(NonLinearPointObj):
+	def __init__(self,a):
+		self.height = 0.75
+		self.weight = 0.01
+		self.tan = math.tan(a)
+		NonLinearPointObj.__init__(index = 0, nx = 30, nu = 12, np=0, gradmode='user', nG=2):
+	def __callg__(self,x, F, G, row, col, rec, needg):
+		F[:] = self.weight*(x[2] - x[1]*self.tan)**2
+		if needg:
+			if rec:
+				row[:] = [0]*2
+				col[:] = [1,2]
+			G[:] = [2*self.weight*(x[2] - x[1]*self.tan)*(-self.tan), 2*self.weight*(x[2] - x[1]*self.tan)]
+
 #TODO: add other terrains
 if terrain == 0:
 	#LQR, flat terain
@@ -534,6 +587,15 @@ if terrain == 0:
 	xbase[2] = 0.0
 	xbase[1] = 0.75
 	xbase[15] = 0.4
+	R = np.ones(12)*0.00001  #0.00001
+
+elif terrain == 1:
+	Q = np.zeros(30)
+	Q[2] = 0.01 #angle of the torso
+	Q[15] = 100.0
+	xbase = np.zeros(30)
+	xbase[2] = -degree10
+	xbase[15] = 0.4*cos10
 	R = np.ones(12)*0.00001  #0.00001
 
 targetVelocityCost = LqrObj(Q = Q,R=R,xbase = xbase)
@@ -557,6 +619,10 @@ else:
 	#splineCost = EESplineCost()
 	# problem.addNonLinearObj(splineCost)
 	problem.addNonLinearConstr(splineConstr)
+
+if terrain == 1:
+	terrainHeightCost = terrainHeightCost(degree10)
+	problem.addNonLinearPointObj(terrainHeightCost,path = True)
 
 ############################
 #preprocess                #
