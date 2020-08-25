@@ -1,6 +1,7 @@
 from visualizer import GLVisualizer
 import transforms3d.euler as eul
 import pyDiffNE as DNE
+from OpenGL import GL
 import numpy as np
 import klampt,random,math,utils as op
 
@@ -137,11 +138,19 @@ class DiffNERobotModel:
         if self.floor is not None:
             raise RuntimeError("Cannot call set_floor twice!")
         if self.granular:
-            self.floor=self.FloorType(self.body,DNE.Vec4d(floor),"inputs.txt","weights.txt")
+            if DiffNERobotModel.is_plane(floor):
+                self.floor=self.FloorType(self.body,DNE.Vec4d(floor),"inputs.txt","weights.txt")
+            elif DiffNERobotModel.is_terrain_file(floor):
+                self.floor=self.FloorType(self.body,floor[0],floor[1],floor[2],"inputs.txt","weights.txt")
+            else: raise RuntimeError("Unsupported floor type!")
             self.floor.writeEndEffectorVTK("EndEffector.vtk",False)
             self.floor.writeEndEffectorVTK("TorqueCenter.vtk",True)
         else: 
-            self.floor=self.FloorType(self.body,DNE.Vec4d(floor),self.Vec3Type(self.g),nrB,mu,strengthBasis)
+            if DiffNERobotModel.is_plane(floor):
+                self.floor=self.FloorType(self.body,DNE.Vec4d(floor),self.Vec3Type(self.g),nrB,mu,strengthBasis)
+            elif DiffNERobotModel.is_terrain_file(floor):
+                self.floor=self.FloorType(self.body,floor[0],floor[1],floor[2],self.Vec3Type(self.g),nrB,mu,strengthBasis)
+            else: raise RuntimeError("Unsupported floor type!")
             self.floor._externalForces=ees
             self.floor.writeEndEffectorVTK("EndEffector.vtk")
         self.floor.writeVTK("MDPFloor.vtk")
@@ -149,25 +158,25 @@ class DiffNERobotModel:
             if self.granular:
                 self.sim.setC2GranularWrenchConstructor(self.floor)
             else: self.sim.setC2EnvWrenchConstructor(self.floor)
+        self.setup_mesh()
+            
+    def setup_mesh(self):
+        self.mesh=self.sim.getTerrainMesh()
         
-        n=floor[0:3]
-        n=op.mul(n,1/op.norm(n))
-        
-        if abs(n[0])<=abs(n[1]) and abs(n[0])<=abs(n[2]):
-            minId=0
-        elif abs(n[1])<=abs(n[0]) and abs(n[1])<=abs(n[2]):
-            minId=1
-        else: minId=2
-        x=[0,0,0]
-        x[minId]=1
-        x=op.cross(x,n)
-        x=op.mul(x,1/op.norm(x))
-        y=op.cross(n,x)
-        x=op.mul(x,op.norm(floor[0:3]))
-        y=op.mul(y,op.norm(floor[0:3]))
-        
-        p=op.mul(n,-floor[3]/op.norm(floor[0:3]))
-        self.floorQuad=[op.sub(op.sub(p,x),y),op.sub(op.add(p,x),y),op.add(op.add(p,x),y),op.add(op.sub(p,x),y)]
+        self.mesh_vss=[]
+        for v in self.mesh.getV():
+            for vi in [v[0],v[1],v[2]]:
+                self.mesh_vss.append(vi)
+                
+        self.mesh_nss=[]
+        for n in self.mesh.getN():
+            for ni in [n[0],n[1],n[2]]:
+                self.mesh_nss.append(ni)
+                
+        self.mesh_iss=[]
+        for i in self.mesh.getI():
+            for ii in [i[0],i[1],i[2]]:
+                self.mesh_iss.append(ii)
         
     def set_PD_controller(self,PCoef=1000.0,DCoef=1.0):
         if self.sim is None:
@@ -369,9 +378,6 @@ class DiffNERobotModel:
         DNE.setNumThreads(N)
     
     def set_joint_angle(self,name,value):
-
-        for j in range(self.body.nrJ()):
-            print(j,self.body.joint(j)._name)
         for j in range(self.body.nrJ()):
             if self.body.joint(j)._name.startswith(name):
                 self.qdq[self.body.joint(j)._offDOF]=value
@@ -384,7 +390,24 @@ class DiffNERobotModel:
         self.robot.setConfig(self.get_klampt_DOF(qdq))
         
     def display(self):
-        if self.floorQuad is not None:
-            klampt.vis.gldraw.setcolor(TABLE_COLOR[0],TABLE_COLOR[1],TABLE_COLOR[2])
-            klampt.vis.gldraw.quad(self.floorQuad[0],self.floorQuad[1],self.floorQuad[2],self.floorQuad[3])
+        GL.glPolygonMode(GL.GL_FRONT_AND_BACK,GL.GL_LINE)
+        klampt.vis.gldraw.setcolor(TABLE_COLOR[0],TABLE_COLOR[1],TABLE_COLOR[2])
+        GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
+        GL.glEnableClientState(GL.GL_NORMAL_ARRAY)
+        GL.glVertexPointer(3, GL.GL_FLOAT, 0, self.mesh_vss)
+        GL.glNormalPointer(GL.GL_FLOAT, 0, self.mesh_nss)
+        GL.glDrawElements(GL.GL_TRIANGLES, len(self.mesh_iss), GL.GL_UNSIGNED_INT, self.mesh_iss)
+        GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
+        GL.glDisableClientState(GL.GL_NORMAL_ARRAY)
         
+    @staticmethod
+    def fori(val):
+        return isinstance(val,float) or isinstance(val,int)
+        
+    @staticmethod
+    def is_plane(floor):
+        return len(floor)==4 and DiffNERobotModel.fori(floor[0]) and DiffNERobotModel.fori(floor[1]) and DiffNERobotModel.fori(floor[2]) and DiffNERobotModel.fori(floor[3])
+    
+    @staticmethod
+    def is_terrain_file(floor):
+        return len(floor)==3 and isinstance(floor[0],str) and isinstance(floor[1],int) and DiffNERobotModel.fori(floor[2])

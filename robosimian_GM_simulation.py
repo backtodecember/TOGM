@@ -23,6 +23,7 @@ from KlamptDiffNE import *
 import pyDiffNE
 import pickle
 
+degree10 = 10.0/180.0*math.pi
 
 class robosimianSimulator:
 	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01,dyn = 'own',print_level = 0, \
@@ -38,12 +39,12 @@ class robosimianSimulator:
 		self.integration = 'semi-Euler' #"semi-Euler"
 		self.profile_computation = False
 		self.D = 15
-		self.terrain = terrain
+		self.terrainNo = terrain
 		if self.dyn == 'own':
-			if terrain > 0:
+			if terrain > 1:
 				print("other terrains for own dynamics are not implemented yet")
 				exit()
-			self.robot = robosimian(print_level = print_level, RL = RL, terrain = self.terrain)
+			self.robot = robosimian(print_level = print_level, RL = RL, terrain = self.terrainNo)
 			self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
 			self.compute_pool = mp.Pool(4)
 			#parameters for doing sensitivity analysis
@@ -108,8 +109,6 @@ class robosimianSimulator:
 			self.dhx = np.zeros((120,self.Dx+self.Du))
 
 		elif self.dyn == 'diffne':
-			#TODO:change different terrains
-
 			world = klampt.WorldModel()
 			self.robot =  DiffNERobotModel(world,"Robosimian/robosimian_caesar_new_all_active.urdf",use2DBase=True)
 			#specify fixed joints
@@ -140,16 +139,18 @@ class robosimianSimulator:
 					ee.detectEndEffector(self.robot.body,zRange)
 					ees.append(ee)
 
-
-			#print('debug:',self.q,self,q_dot)
 			#create the simulator, use RK1F mode, force-level MDP
 			self.robot.create_simulator(accuracy=64,granular=True,mode = DNE.FORWARD_RK1F)     #this will use double
 			#self.robot.create_simulator(accuracy=128,granular=True,mode = DNE.FORWARD_RK1F)    #this will use quadmath
 			#self.robot.create_simulator(accuracy=512,granular=True,mode = DNE.FORWARD_RK1F)    #this will use MPFR
 
 			#set the floor
-			self.robot.set_floor([0,0,1,0],ees) # the list means Ax+By+Cz+D = 0. This basically sets a z = 0 plane.
-
+			if self.terrainNo == 0:
+				self.robot.set_floor([0,0,1,0],ees) # the list means Ax+By+Cz+D = 0. This basically sets a z = 0 plane.
+			else:
+				terrainFile=("terrain"+str(self.terrainNo)+".txt",True,8) #I think the third parameter controls the display resolution. 8 = display 1/8 of the points in the 
+				#.txt file
+				self.robot.set_floor(terrainFile,ees)
 
 		else:
 			raise Exception('Wrong Dyn given')
@@ -804,12 +805,9 @@ class robosimianSimulator:
 		return dadx
 
 	def generateContacts(self):
-		#TODO: add different terrains here
 
 		##How to generate contact on a curved surface needs a bit more thoughts/care
 		"""Right not do not handle the case where a rigid body's angle is > pi/2.."""
-
-		#print(self.robot.get_ankle_positions())
 
 		contacts = []
 		limb_indices = []
@@ -817,30 +815,53 @@ class robosimianSimulator:
 
 		#loop through the 4 ankles
 		positions = self.robot.get_ankle_positions()
-
-		for i in range(4):
-			p = positions[i]
-			if self.RL:
-				self.ankle_poses[i*2,0] = p[1]
-				self.ankle_poses[i*2+1,0] = p[2]
-			#even of not contact, still give a contact force 
-			if p[2] >= 0:
-				contact = [p[1],p[2],1,i,0] #the last element doesn't really mean anything, it's from the matlab program...
-			else:
-				if not self.augmented:
-					contact = [p[1],-p[2],-1,i,0]
+		if self.terrainNo == 0:
+			for i in range(4):
+				p = positions[i]
+				if self.RL:
+					self.ankle_poses[i*2,0] = p[1]
+					self.ankle_poses[i*2+1,0] = p[2]
+				#even of not contact, still give a contact force 
+				if p[2] >= 0:
+					contact = [p[1],p[2],1,i,0] #the last element doesn't really mean anything, it's from the matlab program...
 				else:
-					contact = [p[1],p[2],1,i,0]
-			if self.augmented:
-				contacts.append(contact)
-				limb_indices.append(i)
-				NofContacts += 1
-			else:
-				if p[1] <= 0:
+					if not self.augmented:
+						contact = [p[1],-p[2],-1,i,0]
+					else:
+						contact = [p[1],p[2],1,i,0]
+				if self.augmented:
 					contacts.append(contact)
 					limb_indices.append(i)
 					NofContacts += 1
-		#print(contacts)
+				else:
+					if p[1] <= 0:
+						contacts.append(contact)
+						limb_indices.append(i)
+						NofContacts += 1
+
+		if self.terrainNo == 1:
+			for i in range(4):
+				p = positions[i]
+				if self.RL:
+					pass
+				if p[2] + degree10 >= 0:
+					contact = [p[1] - p[0]*math.tan(degree10),p[2] + degree10,1,i,0] #the last element doesn't really mean anything, it's from the matlab program...
+				else:
+					if not self.augmented:
+						contact = [p[1] - p[0]*math.tan(degree10), - p[2] - degree10,-1,i,0]
+					else:
+						contact = [p[1] - p[0]*math.tan(degree10),p[2] + degree10,1,i,0]
+
+				if self.augmented:
+					contacts.append(contact)
+					limb_indices.append(i)
+					NofContacts += 1
+				else:
+					if p[1] - p[0]*math.tan(degree10) <= 0:
+						contacts.append(contact)
+						limb_indices.append(i)
+						NofContacts += 1
+
 		return contacts,NofContacts,limb_indices
 
 	def _terrainFunction(self,x,a):

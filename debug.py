@@ -336,28 +336,28 @@ if __name__=="__main__":
 	############
 	########Debug EE splines stuff
 	############
-	traj = np.hstack((np.load('results/PID_trajectory/4/q_init_guess.npy'),np.load('results/PID_trajectory/4/q_dot_init_guess.npy')))
-	u = np.load('results/PID_trajectory/4/u_init_guess.npy')
+	# traj = np.hstack((np.load('results/PID_trajectory/4/q_init_guess.npy'),np.load('results/PID_trajectory/4/q_dot_init_guess.npy')))
+	# u = np.load('results/PID_trajectory/4/u_init_guess.npy')
 
-	x = np.array([])
-	counter = 0
-	for i,j in zip(traj,u):
-		x = np.concatenate((x,i,j))
-		counter += 1
-		if counter >N -1 :
-			break
-	addX_guess = np.array([0.23579254920625653]*10 +  [-0.1334011528321084]*10 + [-0.258711560597295]*10 +  [-0.12993365949253063]*10 \
-		+ [-0.7714073484872508]*10 + [-0.11461216997819987]*10 +  [0.7483930622411774]*10 + [-0.10170425069417896]*10)
+	# x = np.array([])
+	# counter = 0
+	# for i,j in zip(traj,u):
+	# 	x = np.concatenate((x,i,j))
+	# 	counter += 1
+	# 	if counter >N -1 :
+	# 		break
+	# addX_guess = np.array([0.23579254920625653]*10 +  [-0.1334011528321084]*10 + [-0.258711560597295]*10 +  [-0.12993365949253063]*10 \
+	# 	+ [-0.7714073484872508]*10 + [-0.11461216997819987]*10 +  [0.7483930622411774]*10 + [-0.10170425069417896]*10)
 
-	x = np.concatenate((x,addX_guess))
-	import time
-	constr = EESplineConstraint()
-	start_time = time.time()
-	constr.__callg__(x)
-	print('\n')
-	print('\n')
-	print('\n')
-	print("time elapsed:",time.time() - start_time)
+	# x = np.concatenate((x,addX_guess))
+	# import time
+	# constr = EESplineConstraint()
+	# start_time = time.time()
+	# constr.__callg__(x)
+	# print('\n')
+	# print('\n')
+	# print('\n')
+	# print("time elapsed:",time.time() - start_time)
 
 
 
@@ -502,4 +502,38 @@ if __name__=="__main__":
 	# print('Max Dynamics Constr:',np.sort(np.array(dyn_constr)))
 	# print('Ankle Pose Constr:',knitro_con[5401:5401+181*8])
 	# print('Enough Translation Constr:',knitro_con[5401+181*8:5401+181*8+1])
+
+	from robosimian_GM_simulation_3D_base import robosimianSimulator
+	from robosimian_wrapper_3D_base import robosimian
+
+	robot = robosimian()
+	dt = 0.05
+	simulator = robosimianSimulator(dt = dt,dyn = 'diffne', augmented = True, extrapolation = True, integrate_dt = dt)
+
+
+	# x = np.hstack((np.load('results/PID_trajectory/12/q_init_guess.npy'),np.load('results/PID_trajectory/12/q_dot_init_guess.npy')))
+	# u = np.load('results/PID_trajectory/12/u_init_guess.npy')
+
+
+	x = np.load('results/33/run1/solution_x191.npy')
+	u = np.load('results/33/run1/solution_u191.npy')
+
+	x_160 = x[159]
+	u_160 = u[160]
+	x_161 = x[160]
+	u_161 = u[161]
+
+
+	robot.set_q_2D_(x_160[0:18])
+	robot.set_q_dot_2D_(x_160[18:36])
+	p = robot.get_ankle_positions()
+	F = np.array([p[0][1],p[0][2],p[1][1],p[1][2],p[2][1],p[2][2],p[3][1],p[3][2]])
+	print("ankle positions:",F)
+
+	a,J_tmp = simulator.getDynJac(x_160,u_160)
+	print(a)
+	# a = np.concatenate([x[18:36],np.ravel(a)])		
+	# J = np.zeros((36,1+36+12))
+	# J[:,1:49] = J_tmp
+	# return a,J
 

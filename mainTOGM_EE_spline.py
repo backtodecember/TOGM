@@ -25,7 +25,7 @@ global N_of_control_pts
 N_of_control_pts = 30
 global N
 N = 181 #9s trajectory 0.05
-terrain = 0
+terrain = 1
 
 
 class Robosimian(System):
@@ -39,17 +39,17 @@ class Robosimian(System):
 		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = dt,dyn = 'diffne', augmented = True, extrapolation = True, integrate_dt = dt)
 
 	def dyn(self,t,x,u,p=None):  
-		a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
-		return np.concatenate([x[15:30],a]) #1D numpy array
-		# return np.zeros(30)
+		# a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
+		# return np.concatenate([x[15:30],a]) #1D numpy array
+		return np.zeros(30)
 
 	def jac_dyn(self, t, x, u, p=None):
-		a,J_tmp = self.robot.getDynJac(x,u)
-		a = np.concatenate([x[15:30],np.ravel(a)])		
-		J = np.zeros((30,1+30+12))
-		J[:,1:43] = J_tmp
-		return a,J
-		# return np.zeros(30),np.zeros((30,43))
+		# a,J_tmp = self.robot.getDynJac(x,u)
+		# a = np.concatenate([x[15:30],np.ravel(a)])		
+		# J = np.zeros((30,1+30+12))
+		# J[:,1:43] = J_tmp
+		# return a,J
+		return np.zeros(30),np.zeros((30,43))
 
 class EESpline(AddX):
 	def __init__(self):

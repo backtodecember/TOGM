@@ -9,7 +9,7 @@ import math
 from copy import copy
 #semi-euler integration:
 kp = np.array([1000.0,1000.0,1000.0]*4)
-ki = np.array([0.0]*12)
+ki = np.array([1]*12)
 kd = np.array([10.0,8.0,10.0]*4)
 
 #euler integration:
@@ -34,11 +34,11 @@ q_2D = trajectory.eval(0.0)
 
 # q_2D = copy(q_2D_0)
 
-q_2D[0:3] = [0,0.85,0]
+q_2D[0:3] = [0,0.75,-0.17]
 q_desried_0 = deepcopy(q_2D[3:15])
 q_2D = np.array(q_2D)[np.newaxis].T
 q_dot_2D = np.array([0.0]*15)[np.newaxis].T
-terrain = 5
+terrain = 1
 simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = dt, dyn = 'diffne',print_level = 0,augmented = True,extrapolation = True, \
 	integrate_dt = dt,terrain = terrain)
 
@@ -68,7 +68,7 @@ vis.show()
 vis.addText('time','time: '+str(0))
 time.sleep(0.1)
 
-time.sleep(20)
+time.sleep(1)
 
 simulation_time = 0.0
 start_time = time.time()
@@ -128,7 +128,7 @@ while vis.shown():
 	time.sleep(1)
 vis.kill()
 
-# No = 13
+# No = 15
 # np.save('results/PID_trajectory/'+str(No)+'/q_history.npy',np.array(q_history))
 # np.save('results/PID_trajectory/'+str(No)+'/q_dot_history.npy',np.array(q_dot_history))
 # np.save('results/PID_trajectory/'+str(No)+'/u_history.npy',np.array(u_history))
