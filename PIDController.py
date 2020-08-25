@@ -34,21 +34,33 @@ q_2D = trajectory.eval(0.0)
 
 # q_2D = copy(q_2D_0)
 
-q_2D[0:3] = [0,0.75,-0.17]
-q_desried_0 = deepcopy(q_2D[3:15])
+degree10 = math.pi*10.0/180.0
+q_2D[0:3] = [0,0.75,0]
+q_2D[5] -= degree10
+q_2D[8] -= degree10
+q_2D[11] += degree10
+q_2D[14] += degree10
+
+q_desired_0 = deepcopy(q_2D[3:15])
+
 q_2D = np.array(q_2D)[np.newaxis].T
 q_dot_2D = np.array([0.0]*15)[np.newaxis].T
-terrain = 1
+terrain = 0
 simulator = robosimianSimulator(q = q_2D,q_dot = q_dot_2D, dt = dt, dyn = 'diffne',print_level = 0,augmented = True,extrapolation = True, \
 	integrate_dt = dt,terrain = terrain)
 
 def target_q(time):
 	settle_time = 1.0
 	if time <= settle_time:
-		return q_desried_0
+		return q_desired_0
 	else:
-		return trajectory.eval(time-settle_time,True)[3:15]
-
+		tmp = trajectory.eval(time-settle_time,True)[3:15]
+		tmp[2] -= degree10
+		tmp[5] -= degree10
+		tmp[8] += degree10
+		tmp[11] += degree10
+		return tmp
+		
 	#q = q_2D_0[3:15]
 	return q 
 
@@ -128,11 +140,11 @@ while vis.shown():
 	time.sleep(1)
 vis.kill()
 
-# No = 15
-# np.save('results/PID_trajectory/'+str(No)+'/q_history.npy',np.array(q_history))
-# np.save('results/PID_trajectory/'+str(No)+'/q_dot_history.npy',np.array(q_dot_history))
-# np.save('results/PID_trajectory/'+str(No)+'/u_history.npy',np.array(u_history))
-# np.save('results/PID_trajectory/'+str(No)+'/time_history.npy',np.array(time_history))
+No = 15
+np.save('results/PID_trajectory/'+str(No)+'/q_history.npy',np.array(q_history))
+np.save('results/PID_trajectory/'+str(No)+'/q_dot_history.npy',np.array(q_dot_history))
+np.save('results/PID_trajectory/'+str(No)+'/u_history.npy',np.array(u_history))
+np.save('results/PID_trajectory/'+str(No)+'/time_history.npy',np.array(time_history))
 
 #simulator.closePool()
 #vis.kill()

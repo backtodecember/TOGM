@@ -36,20 +36,21 @@ class Robosimian(System):
 		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
 		dt = 0.05
 		#Test 14+ should have extraploation set to be True
-		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = dt,dyn = 'diffne', augmented = True, extrapolation = True, integrate_dt = dt)
+		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = dt,dyn = 'diffne', augmented = True, extrapolation = True, \
+			integrate_dt = dt,terrain = terrain)
 
 	def dyn(self,t,x,u,p=None):  
-		# a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
-		# return np.concatenate([x[15:30],a]) #1D numpy array
-		return np.zeros(30)
+		a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
+		return np.concatenate([x[15:30],a]) #1D numpy array
+		# return np.zeros(30)
 
 	def jac_dyn(self, t, x, u, p=None):
-		# a,J_tmp = self.robot.getDynJac(x,u)
-		# a = np.concatenate([x[15:30],np.ravel(a)])		
-		# J = np.zeros((30,1+30+12))
-		# J[:,1:43] = J_tmp
-		# return a,J
-		return np.zeros(30),np.zeros((30,43))
+		a,J_tmp = self.robot.getDynJac(x,u)
+		a = np.concatenate([x[15:30],np.ravel(a)])		
+		J = np.zeros((30,1+30+12))
+		J[:,1:43] = J_tmp
+		return a,J
+		# return np.zeros(30),np.zeros((30,43))
 
 class EESpline(AddX):
 	def __init__(self):
@@ -90,8 +91,8 @@ else:
 #TODO: Add other terrains
 degree10 = math.pi*10.0/180.0
 degree20 = math.pi*10.0/180.0
-self.tana = math.tan(degree10)
-self.cosa = math.cos(degree10)
+tan10 = math.tan(degree10)
+cos10 = math.cos(degree10)
 if terrain == 0:
 	problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2,0.3] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
@@ -112,8 +113,8 @@ class anklePoseConstr(NonLinearPointConstr):
 		self.terrain = terrain
 		lb = np.array([-0.3,-1.0,-0.3,-1.0,-0.3,-1.0,-0.3,-1.0])
 		ub = np.array([1.0]*8)
-		self.robot = robosimian()
-		self.terrain > 0 and self.terrain < 5:
+		self.robot = robosimian(terrain = self.terrain)
+		if self.terrain > 0 and self.terrain < 5:
 			if self.terrain == 1:
 				self.tana = tan10
 				self.cosa = cos10
@@ -161,7 +162,7 @@ class anklePoseConstr(NonLinearPointConstr):
 				G[:] = Gs
 
 class periodicCost(NonLinearObj):
-	def __init__(self,C = 0.1, N = 60):
+	def __init__(self,C = 0.1, T = 60):
 		global N_of_control_pts,angle_spline_flag
 		self.nX = 30
 		self.nU = 12
@@ -169,7 +170,7 @@ class periodicCost(NonLinearObj):
 		self.C = C
 		global N
 		self.N = N
-		self.period = 60 #3s, 0.05dt, --- 60 interval
+		self.period = T #3s, 0.05dt, --- 60 interval
 		self.state_length = self.nX+self.nU+self.nP
 		if angle_spline_flag:
 			self.nAddX =  4*N_of_control_pts
@@ -296,7 +297,7 @@ class EESplineConstraint(NonLinearConstr):
 		self.nc = int(8*((N-1)/self.gap+1))
 		self.nc_4 = int(2*((N-1)/self.gap+1))
 		self.state_length = N*(self.nX+self.nU+self.nP) 
-		self.robot = robosimian()
+		self.robot = robosimian(terrain = terrain)
 		self.mesh_indeces = np.linspace(0,1,int((N-1)/self.gap+1))
 		self.mesh_indeces_int = np.arange(0,N,self.gap)
 		self.linear_indeces = np.arange(0,int((N-1)/self.gap+1),1)
@@ -394,7 +395,7 @@ class EESplineCost(NonLinearObj):
 		self.nc = int(8*((N-1)/self.gap+1))
 		self.nc_4 = int(2*((N-1)/self.gap+1))
 		self.state_length = N*(self.nX+self.nU+self.nP) 
-		self.robot = robosimian()
+		self.robot = robosimian(terrain = terrain)
 		self.mesh_indeces = np.linspace(0,1,int((N-1)/self.gap+1))
 		self.mesh_indeces_int = np.arange(0,N,self.gap)
 		self.linear_indeces = np.arange(0,int((N-1)/self.gap+1),1)
@@ -483,7 +484,7 @@ class AngleSplineConstraint(NonLinearConstr):
 		self.nc = int(4*((N-1)/self.gap+1))
 		self.nc_4 = int(((N-1)/self.gap+1))
 		self.state_length = N*(self.nX+self.nU+self.nP) 
-		self.robot = robosimian()
+		self.robot = robosimian(terrain = terrain)
 		self.mesh_indeces = np.linspace(0,1,int((N-1)/self.gap+1))
 		self.mesh_indeces_int = np.arange(0,N,self.gap)
 		self.linear_indeces = np.arange(0,int((N-1)/self.gap+1),1)
@@ -567,7 +568,7 @@ class terrainHeightCost(NonLinearPointObj):
 		self.height = 0.75
 		self.weight = 0.01
 		self.tan = math.tan(a)
-		NonLinearPointObj.__init__(index = 0, nx = 30, nu = 12, np=0, gradmode='user', nG=2):
+		NonLinearPointObj.__init__(self,index = 0, nx = 30, nu = 12, np=0, gradmode='user', nG=2)
 	def __callg__(self,x, F, G, row, col, rec, needg):
 		F[:] = self.weight*(x[2] - x[1]*self.tan)**2
 		if needg:
@@ -606,7 +607,7 @@ targetVelocityCost = LqrObj(Q = Q,R=R,xbase = xbase)
 
 #setting 21,24
 constr1 = anklePoseConstr()
-periodicCost = periodicCost(C = 0.1,N = 60)
+periodicCost = periodicCost(C = 0.1,T = 60)
 problem.add_lqr_obj(targetVelocityCost)
 problem.addNonLinearObj(periodicCost)
 problem.addNonLinearPointConstr(constr1,path = True)
@@ -655,7 +656,7 @@ print('preProcess took:',time.time() - startTime)
 #1004: how mu changes..
 ##debug information 1032
 
-run = '19'
+run = '1'
 options = {'1105':'run'+run+'.log','1014':1000,'1023':1e-3,'1016':2,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':4,\
 	'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
@@ -667,7 +668,7 @@ slv = OptSolver(problem, cfg)
 ###############################
 
 #setting 21, run2 ,24
-path = 'results/PID_trajectory/13/'
+path = 'results/PID_trajectory/15/'
 traj_guess = np.hstack((np.load(path + 'q_init_guess.npy'),np.load(path + 'q_dot_init_guess.npy')))
 u_guess = np.load(path + 'u_init_guess.npy')
 
