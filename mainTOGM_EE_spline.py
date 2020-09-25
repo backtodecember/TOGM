@@ -28,13 +28,14 @@ N = 181 #9s trajectory 0.05
 terrain = 6
 diffne_mu = 1e-3
 target_speed = 0.4
+dt = 0.05
+addX_range = 2.0
 class Robosimian(System):
 	def __init__(self):
 		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
 		q_2D = np.array([0.0,1.02,0.0] + [0.6- 1.5708,0.0,-0.6]+[0.6+1.5708,0.0,-0.6]+[0.6-1.5708,0.0,-0.6] \
 	 		+[0.6+1.5708,0.0,-0.6])[np.newaxis].T
 		q_dot_2D = np.array([0.0]*15)[np.newaxis].T
-		dt = 0.05
 		#Test 14+ should have extraploation set to be True
 		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = dt,dyn = 'diffne', augmented = True, extrapolation = True, \
 			integrate_dt = dt,terrain = terrain,diffne_mu = diffne_mu)
@@ -64,8 +65,8 @@ class EESpline2(AddX):
 	def __init__(self):
 		global N_of_control_pts
 		self.n = 4*N_of_control_pts 
-		self.lb = np.array(([-2.0]*N_of_control_pts)*4)
-		self.ub = np.array(([2.0]*N_of_control_pts)*4)
+		self.lb = np.array(([-addX_range]*N_of_control_pts)*4)
+		self.ub = np.array(([addX_range]*N_of_control_pts)*4)
 		AddX.__init__(self, n = self.n, lb = self.lb, ub = self.ub)
 
 ############################
@@ -100,28 +101,9 @@ else:
 ############################
 #Add state bounds          #
 ############################
-degree10 = math.pi*10.0/180.0
-degree20 = math.pi*20.0/180.0
-if terrain == 6:
-	terrain = 3
-	tan_10 = math.tan(-math.pi*5.0/180.0)
-	cos_10 = math.cos(-math.pi*5.0/180.0)
-	sin_10 = math.sin(-math.pi*5.0/180.0)
-	degree_10 = -math.pi*5.0/180.0
-else:
-	degree_10 = -degree10
-	tan_10 = math.tan(degree_10)
-	cos_10 = math.cos(degree_10)
-	sin_10 = math.sin(degree_10)
+terrain_angle_list = [math.pi*10.0/180.0,math.pi*20.0/180.0,-math.pi*10.0/180.0,-math.pi*20.0/180.0,0,-math.pi*5.0/180.0]
+ta = terrain_angle_list[terrain]
 
-tan10 = math.tan(degree10)
-cos10 = math.cos(degree10)
-tan20 = math.tan(degree20)
-cos20 = math.cos(degree20)
-
-degree_20 = -degree20
-tan_20 = math.tan(degree_20)
-cos_20 = math.cos(degree_20)
 if terrain == 0:
 	problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2,0.3] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
@@ -129,49 +111,50 @@ if terrain == 0:
 	problem.xfbd = [np.array([-0.2,0.4,-0.3] + [-math.pi]*12 + [-2]*15),np.array([5,1.1,0.3] + [math.pi]*12 + [2]*15)]
 
 elif terrain == 1:
-	#This is assuming that the target speed of the torso is 0.4m/s on the slope
-	problem.xbd = [np.array([-0.2,0.4,-0.3-degree10] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 + math.sin(degree10)*target_speed*9.0,0.3-degree10] + [math.pi*1.5]*12 + [3]*15)]
+	problem.xbd = [np.array([-0.2,0.4,-0.3-ta] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 + math.sin(ta)*target_speed*9.0,0.3-ta] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
-	problem.x0bd = [np.array([-0.05,0.4,-0.3-degree10] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
-	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree10)*target_speed*9.0,-0.3-degree10] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree10)*target_speed*9.0,0.3-degree10] + \
+	problem.x0bd = [np.array([-0.05,0.4,-0.3-ta] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(ta)*target_speed*9.0,-0.3-ta] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(ta)*target_speed*9.0,0.3-ta] + \
 		[math.pi]*12 + [2]*15)]
 
 elif terrain == 2:
-	#This is assuming that the target speed of the torso is 0.4m/s on the slope
-	problem.xbd = [np.array([-0.2,0.4,-0.3-degree20] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 + math.sin(degree20)*target_speed*9.0,0.3-degree20] + [math.pi*1.5]*12 + [3]*15)]
+	problem.xbd = [np.array([-0.2,0.4,-0.3-ta] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 + math.sin(ta)*target_speed*9.0,0.3-ta] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
-	problem.x0bd = [np.array([-0.05,0.4,-0.3-degree20] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
-	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree20)*target_speed*9.0,-0.3-degree20] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree20)*target_speed*9.0,0.3-degree20] + \
+	problem.x0bd = [np.array([-0.05,0.4,-0.3-ta] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(ta)*target_speed*9.0,-0.3-ta] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(ta)*target_speed*9.0,0.3-ta] + \
 		[math.pi]*12 + [2]*15)]
 
 elif terrain == 3:
-	#This is assuming that the target speed of the torso is 0.4m/s on the slope
-	problem.xbd = [np.array([-0.2,0.4+math.sin(degree_10)*target_speed*9.0,-0.5 - degree_10] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 ,0.5 - degree_10] + [math.pi*1.5]*12 + [3]*15)]
+	problem.xbd = [np.array([-0.2,0.4+math.sin(ta)*target_speed*9.0,-0.5 - ta] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 ,0.5 - ta] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
-	problem.x0bd = [np.array([-0.05,0.4,-0.5 - degree_10] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.5] + [math.pi*1.5]*12 + [2.0]*15)]
-	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree_10)*target_speed*9.0,-0.5-degree_10] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree_10)*target_speed*9.0,0.5-degree_10] + \
+	problem.x0bd = [np.array([-0.05,0.4,-0.5 - ta] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.5] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(ta)*target_speed*9.0,-0.5-ta] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(ta)*target_speed*9.0,0.5-ta] + \
 		[math.pi]*12 + [2]*15)]
-	# problem.xfbd = [np.array([3,0.4 + math.sin(degree_10)*target_speed*9.0,-0.5-degree_10] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree_10)*target_speed*9.0,0.5-degree_10] + \
+	# problem.xfbd = [np.array([3,0.4 + math.sin(ta)*target_speed*9.0,-0.5-ta] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(ta)*target_speed*9.0,0.5-ta] + \
 	# 	[math.pi]*12 + [2]*15)]
 
 elif terrain == 4:
-	#This is assuming that the target speed of the torso is 0.4m/s on the slope
-	problem.xbd = [np.array([-0.2,0.4+math.sin(degree_20)*target_speed*9.0,-0.5 - degree_20] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 ,0.5 - degree_20] + [math.pi*1.5]*12 + [3]*15)]
+	problem.xbd = [np.array([-0.2,0.4+math.sin(ta)*target_speed*9.0,-0.5 - ta] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 ,0.5 - ta] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
-	problem.x0bd = [np.array([-0.05,0.4,-0.5 - degree_20] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.5 - degree_20] + [math.pi*1.5]*12 + [2.0]*15)]
-	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree_20)*target_speed*9.0,-0.5-degree_20] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree_20)*target_speed*9.0,0.5-degree_20] + \
+	problem.x0bd = [np.array([-0.05,0.4,-0.5 - ta] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.5 - ta] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(ta)*target_speed*9.0,-0.5-ta] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(ta)*target_speed*9.0,0.5-ta] + \
 		[math.pi]*12 + [2]*15)]
 
 elif terrain == 5:
 	max_h = 0.4
 	min_h = -0.3
-	#This is assuming that the target speed of the torso is 0.4m/s on the slope
 	problem.xbd = [np.array([-0.2,0.4+min_h,-0.6] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2+max_h ,0.6] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
 	problem.x0bd = [np.array([-0.05,0.4,-0.5] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.5] + [math.pi*1.5]*12 + [2.0]*15)]
 	problem.xfbd = [np.array([-0.2,0.4+min_h,-0.5] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + max_h,0.5] + \
 		[math.pi]*12 + [2]*15)]
 
+elif terrain == 3:
+	problem.xbd = [np.array([-0.2,0.4+math.sin(ta)*target_speed*9.0,-0.5 - ta] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 ,0.5 - ta] + [math.pi*1.5]*12 + [3]*15)]
+	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
+	problem.x0bd = [np.array([-0.05,0.4,-0.5 - ta] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.5] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(ta)*target_speed*9.0,-0.5-ta] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(ta)*target_speed*9.0,0.5-ta] + \
+		[math.pi]*12 + [2]*15)]
 
 ##Here for terrain 5, for simplicity reasons, use the vertical depth as the depth, so is that for the angle..
 class anklePoseConstr(NonLinearPointConstr):
@@ -679,43 +662,18 @@ if terrain == 0:
 	xbase[1] = 0.75
 	xbase[15] = 0.4
 	R = np.ones(12)*0.00001  #0.00001
-elif terrain == 1:
+elif terrain > 0 and terrain != 5:
 	Q = np.zeros(30)
 	Q[2] = 0.01 #angle of the torso
 	Q[15] = 100.0
 	xbase = np.zeros(30)
-	xbase[2] = -degree10
-	xbase[15] = 0.4*cos10
+	xbase[2] = -ta
+	xbase[15] = 0.4*math.cos(ta)
 	R = np.ones(12)*0.00001  #0.00001
-elif terrain == 2:
-	Q = np.zeros(30)
-	Q[2] = 0.01 #angle of the torso
-	Q[15] = 100.0
-	xbase = np.zeros(30)
-	xbase[2] = -degree20
-	xbase[15] = 0.4*cos20
-	R = np.ones(12)*0.00001  #0.00001
-elif terrain == 3:
-	Q = np.zeros(30)
-	Q[2] =  0.01 #angle of the torso
-	Q[15] = 100.0
-	xbase = np.zeros(30)
-	xbase[2] = -degree_10
-	xbase[15] = target_speed*cos_10
 
-	# xbase[16] = 0.4*sin_10
-	# Q[16] = 100.0
-	R = np.ones(12)*1e-5
-elif terrain == 4:
-	Q = np.zeros(30)
-	Q[2] = 0.01 #angle of the torso
-	Q[15] = 100.0
-	xbase = np.zeros(30)
-	xbase[2] = -degree_20
-	xbase[15] = 0.4*cos_20
-	R = np.ones(12)*0.00001  #0.00001
 targetVelocityCost = LqrObj(Q = Q,R = R,xbase = xbase)
 # targetVelocityCost = LqrObj(Q = Q,xbase = xbase)
+
 ##############################
 #set the problem constraints #
 ##############################
@@ -729,25 +687,17 @@ problem.addNonLinearPointConstr(constr1,path = True)
 
 if angle_spline_flag:
 	splineConstr = AngleSplineConstraint(scale = 0.5)
-	# problem.addNonLinearConstr(splineConstr)
+	problem.addNonLinearConstr(splineConstr)
 else:
 	splineConstr = EESplineConstraint()
 	#splineCost = EESplineCost()
 	#problem.addNonLinearObj(splineCost)
 	problem.addNonLinearConstr(splineConstr)
 
-if terrain == 1:
-	terrainHeightCost = terrainHeightCost(degree10)
+if terrain > 0:
+	terrainHeightCost = terrainHeightCost(ta)
 	problem.addNonLinearPointObj(terrainHeightCost,path = True)
-elif terrain == 2:
-	terrainHeightCost = terrainHeightCost(degree20)
-	problem.addNonLinearPointObj(terrainHeightCost,path = True)
-elif terrain == 3:
-	terrainHeightCost = terrainHeightCost(degree_10)
-	problem.addNonLinearPointObj(terrainHeightCost,path = True)
-elif terrain == 4:
-	terrainHeightCost = terrainHeightCost(degree_20)
-	problem.addNonLinearPointObj(terrainHeightCost,path = True)
+
 ############################
 #preprocess                #
 ############################
@@ -794,42 +744,7 @@ path = 'results/PID_trajectory/34/'
 traj_guess = np.hstack((np.load(path + 'q_init_guess.npy'),np.load(path + 'q_dot_init_guess.npy')))
 u_guess = np.load(path + 'u_init_guess.npy')
 addX_guess = [np.array([0.0]*4*N_of_control_pts)]
-# addX_guess = [np.array([-degree_10]*4*N_of_control_pts)]
-
-
-# angle_list = []
-# for i in range(N_of_control_pts):
-# 	angle_list.append(0.2*math.sin(6.0*math.pi*i/N_of_control_pts))
-# print(angle_list)
-# addX_guess = [np.array(angle_list*4)]
-
-# addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,N_of_control_pts).tolist() +  [-0.133401]*N_of_control_pts \
-# 	+ np.linspace(-0.258711,-0.258711+2.7,N_of_control_pts).tolist() + [-0.129933]*N_of_control_pts + np.linspace(-0.771407,-0.771407+2.7,N_of_control_pts).tolist() + [-0.114612]*N_of_control_pts \
-# 	+ np.linspace(0.748393,0.748393+2.7,N_of_control_pts).tolist() +[-0.101704]*N_of_control_pts)]
-
-
-# below are for 10 control pts, and x,z control pts
-# addX_guess = [np.array([0.235792]*10 +  [-0.133401]*10 + [-0.258711]*10 +  [-0.129933]*10 \
-# 	+ [-0.771407]*10 + [-0.114612]*10 +  [0.748393]*10 +[-0.101704]*10)]
-
-# addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,10).tolist() +  \
-# 	[-0.133401] + [-0.133401+ 0.2*math.sin(math.pi/1.5*1.0),-0.133401,-0.133401]*3 \
-# 	+ np.linspace(-0.258711,-0.258711+2.7,10).tolist() \
-# 	+ [-0.129933] + [-0.129933,-0.129933+ 0.2*math.sin(math.pi/1.5*1.0),-0.129933]*3\
-# 	+ np.linspace(-0.771407,-0.771407+2.7,10).tolist() \
-# 	+ [-0.114612] + [-0.114612+ 0.2*math.sin(math.pi/1.5*1.0),-0.114612,-0.114612]*3\
-# 	+ np.linspace(0.748393,0.748393+2.7,10).tolist() \
-# 	+[-0.101704]+ [-0.101704,-0.101704 + 0.2*math.sin(math.pi/1.5*1.0),-0.101704]*3)]
-
-
-# addX_guess = [np.array(np.linspace(0.235792,0.235792+ 2.7,10).tolist() +  \
-# 	[-0.133401] + [-0.133401+ 0.3*math.sin(math.pi/1.5*1.0),-0.133401,-0.133401]*3 \
-# 	+ np.linspace(-0.258711,-0.258711+2.7,10).tolist() \
-# 	+ [-0.129933] + [-0.129933,-0.129933+ 0.3*math.sin(math.pi/1.5*1.0),-0.129933]*3\
-# 	+ np.linspace(-0.771407,-0.771407+2.7,10).tolist() \
-# 	+ [-0.114612] + [-0.114612+ 0.3*math.sin(math.pi/1.5*1.0),-0.114612,-0.114612]*3\
-# 	+ np.linspace(0.748393,0.748393+2.7,10).tolist() \
-# 	+[-0.101704]+ [-0.101704,-0.101704 + 0.3*math.sin(math.pi/1.5*1.0),-0.101704]*3)]
+# addX_guess = [np.array([-ta]*4*N_of_control_pts)]
 
 
 # traj_guess = np.load('results/41/run1_test41/solution_x918.npy')
@@ -837,7 +752,6 @@ addX_guess = [np.array([0.0]*4*N_of_control_pts)]
 # addX_guess = np.load('results/41/run1_test41/solution_addx918.npy')
 
 guess = problem.genGuessFromTraj(X= traj_guess[0:N,:], U= u_guess[0:N,:], addx = addX_guess, t0 = 0, tf = tf)
-
 # guess = problem.genGuessFromTraj(X= traj_guess[0:N,:], U= u_guess[0:N,:],t0 = 0, tf = tf)
 
 
