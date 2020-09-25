@@ -24,10 +24,13 @@ import pyDiffNE
 import pickle
 
 degree10 = 10.0/180.0*math.pi
+degree20 = 20.0/180.0*math.pi
+degree_10 = -10.0/180.0*math.pi
+degree_20 = -20.0/180.0*math.pi
 
 class robosimianSimulator:
 	def __init__(self,q = np.zeros((15,1)), q_dot= np.zeros((15,1)) , dt = 0.01,dyn = 'own',print_level = 0, \
-		augmented = True, RL = False, extrapolation = False, integrate_dt = 0.01,terrain = 0):
+		augmented = True, RL = False, extrapolation = False, integrate_dt = 0.01,terrain = 0,diffne_mu = 1e-3,integration = 'semi-Euler'):
 		self.dyn = dyn
 		self.q = q
 		self.q_dot = q_dot
@@ -36,14 +39,14 @@ class robosimianSimulator:
 		self.integrate_dt = integrate_dt
 		self.time = 0
 		self.dof = 15
-		self.integration = 'semi-Euler' #"semi-Euler"
+		self.integration = integration
 		self.profile_computation = False
 		self.D = 15
 		self.terrainNo = terrain
+		self.diffne_me = diffne_mu
 		if self.dyn == 'own':
-			if terrain > 1:
+			if self.terrainNo > 4:
 				print("other terrains for own dynamics are not implemented yet")
-				exit()
 			self.robot = robosimian(print_level = print_level, RL = RL, terrain = self.terrainNo)
 			self.terrain = granularMedia(material = "sand",print_level = print_level, augmented = augmented, extrapolation = extrapolation)
 			self.compute_pool = mp.Pool(4)
@@ -55,6 +58,15 @@ class robosimianSimulator:
 			self.augmented = augmented
 			self.robot.set_q_2D(self.q)
 			self.robot.set_q_dot_2D(self.q_dot)
+
+			if self.terrainNo == 1:
+				self.terrain_angle = -10.0/180.0*math.pi
+			elif self.terrainNo == 2:
+				self.terrain_angle = -20.0/180.0*math.pi
+			elif self.terrainNo == 3:
+				self.terrain_angle = 10.0/180.0*math.pi
+			elif self.terrainNo == 4:
+				self.terrain_angle = 20.0/180.0*math.pi
 
 			#set up M1, which is used for scaling inertia w.r.t. granular media inertia during optimization
 			#self.compute_pool = mp.Pool(4)
@@ -79,9 +91,9 @@ class robosimianSimulator:
 			self.A = cp.Parameter((3*4,26*4))
 			self.A2 = cp.Parameter((4,26*4))
 			self.b2 = cp.Parameter((4,1))
-			#self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
-			#	cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
-			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
+			self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M)+\
+				cp.quad_form(self.Jp@(self.C+self.D@self.x[0:12]),self.M_2))
+			# self.obj = cp.Minimize(cp.quad_form(self.C+self.D@self.x[0:12],self.M))
 
 			self.constraints = [self.x[0:12] - self.A@self.x[12:12+26*4]== np.zeros((12,1)),\
 				self.A2@self.x[12:12+26*4] <= self.b2,\
@@ -143,7 +155,9 @@ class robosimianSimulator:
 			self.robot.create_simulator(accuracy=64,granular=True,mode = DNE.FORWARD_RK1F)     #this will use double
 			#self.robot.create_simulator(accuracy=128,granular=True,mode = DNE.FORWARD_RK1F)    #this will use quadmath
 			#self.robot.create_simulator(accuracy=512,granular=True,mode = DNE.FORWARD_RK1F)    #this will use MPFR
-
+			
+			#Set the accuracy
+			self.robot.set_option("muFinal",diffne_mu)
 			#set the floor
 			if self.terrainNo == 0:
 				self.robot.set_floor([0,0,1,0],ees) # the list means Ax+By+Cz+D = 0. This basically sets a z = 0 plane.
@@ -337,7 +351,7 @@ class robosimianSimulator:
 
 		return copy(self.q_dot.ravel())
 
-	def simulateOnce(self,u,continuous_simulation = False, SA = False, fixed = False):#debug,counter):
+	def simulateOnce(self,u,continuous_simulation = False, SA = False, fixed = False, get_WS = False):#debug,counter):
 		"""
 		u: 1D np array
 		"""	
@@ -464,8 +478,17 @@ class robosimianSimulator:
 
 					print('constraint values:',self.A2.value@self.x.value[12:12+26*4])
 					print(self.x.value[12:12+26*4])
-					
+				
+				#debugging
+				lambdas = self.x.value[12:12+1*26]
+				print('lambdas:',lambdas[7],lambdas[24])
 
+				print('---------')
+				# print(A[0:3,0])
+				# print(A[0:3,25])
+				# print(A[0:3,1])
+				# print(A[0:3,25])
+				# print('--------')
 				#Sensitivity analysis 
 				if SA:
 					self.dEyy[0:12,0:12] = self.D.value.T@self.M.value@self.D.value		
@@ -575,21 +598,23 @@ class robosimianSimulator:
 
 			#################################################################
 			if fixed:
-				if NofContacts > 0:
-					return C+D@wc,fixed_joint_torques
+				if not get_WS:
+					return x_k,fixed_joint_torques
 				else:
-					return C,[]
+					return x_k,fixed_joint_torques,self.A.value
 
 			if not self.RL:
 				if NofContacts > 0:
 					if SA:
 						return x_k,C+D@wc,dx_dotdx
 					else:
-						return x_k,C+D@wc
+						if get_WS:
+							return x_k,C+D@wc,self.A.value
+						else:
+							return x_k,C+D@wc
 				else:
 					pass
 			else:
-				##what do you return when you do RL?
 				return
 
 		elif self.dyn == 'diffne':
@@ -839,29 +864,33 @@ class robosimianSimulator:
 						limb_indices.append(i)
 						NofContacts += 1
 
-		if self.terrainNo == 1:
+
+		if self.terrainNo > 0:
+			degree = -self.terrain_angle
 			for i in range(4):
 				p = positions[i]
 				if self.RL:
 					pass
-				if p[2] + degree10 >= 0:
-					contact = [p[1] - p[0]*math.tan(degree10),p[2] + degree10,1,i,0] #the last element doesn't really mean anything, it's from the matlab program...
+				if p[2] + degree >= 0:
+					contact = [p[1] - p[0]*math.tan(degree),p[2] + degree,1,i,self.terrain_angle] #the last element doesn't really mean anything, it's from the matlab program...
 				else:
 					if not self.augmented:
-						contact = [p[1] - p[0]*math.tan(degree10), - p[2] - degree10,-1,i,0]
+						contact = [p[1] - p[0]*math.tan(degree), - p[2] - degree,-1,i,self.terrain_angle]
 					else:
-						contact = [p[1] - p[0]*math.tan(degree10),p[2] + degree10,1,i,0]
+						contact = [p[1] - p[0]*math.tan(degree),p[2] + degree,1,i,self.terrain_angle]
 
 				if self.augmented:
 					contacts.append(contact)
 					limb_indices.append(i)
 					NofContacts += 1
 				else:
-					if p[1] - p[0]*math.tan(degree10) <= 0:
+					if p[1] - p[0]*math.tan(degree) <= 0:
 						contacts.append(contact)
 						limb_indices.append(i)
 						NofContacts += 1
-
+		
+		
+		print(contacts)
 		return contacts,NofContacts,limb_indices
 
 	def _terrainFunction(self,x,a):

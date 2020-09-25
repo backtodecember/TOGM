@@ -269,6 +269,7 @@ class DiffNERobotModel:
         if self.ops is None:
             return
         self.ops.setOption(self.sim,name,value)
+        self.sim.reset(self.ops)
         
     def print_vars(self):
         self.ops.printVars()

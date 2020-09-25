@@ -86,7 +86,6 @@ class granularMedia:
 			if formulation == 'H':
 				theta_new = contact[0:2]
 				wrenches = np.zeros((self.Nvel,3))
-				#slope_angle = contact[4]
 				for iteration in range(self.Nvel):
 					weights = self.W[iteration*self.Ntheta:iteration*self.Ntheta+self.Ntheta]
 					val,grad = self._RBF(theta_new,self.theta[iteration2],self.eta,self.func)
@@ -162,10 +161,7 @@ class granularMedia:
 				wrenches = np.zeros((self.Nvel,3))
 				#SA
 				Q4s = np.zeros((self.Nvel,6))
-				#slope_angle = contact[4]
-
-				#debug
-				#start_time = time.time()
+				slope_angle = contact[4]
 
 				
 				for iteration in range(self.Nvel):
@@ -196,6 +192,7 @@ class granularMedia:
 					tmp = vo.cross(vo.mul(unit_direction,C),[p[0],0,p[1]])
 					p[2] = p[2] + tmp[2]
 					wrenches[iteration] = p
+					
 
 					#modify the gradient to account for change of torque center
 					Q4[2,0] = Q4[2,0] + math.cos(theta_new[1])*C*Q4[0,0] - math.sin(theta_new[1])*C*Q4[1,0]
@@ -204,6 +201,11 @@ class granularMedia:
 
 					#TODO: for a slope, we would need to do this..
 					#wrenches[iteration][0:2] = so2.apply(wrenches[iteration][0:2],slope_angle)
+					#TODO:need to finish the gradients for this as well
+					tmp = [wrenches[iteration][0],wrenches[iteration][1]]
+					tmp= so2.apply(-slope_angle,tmp)
+					wrenches[iteration][0] = tmp[0]
+					wrenches[iteration][1] = tmp[1]
 
 					#deal with the mirror configuration, flip x force and torque. z force can stay the same..
 					if not self.augmented:

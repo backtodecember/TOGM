@@ -65,9 +65,16 @@ back = [[0.1968+0.1, -0.77403],[-0.6897,-0.77403],[-0.6933,-0.77403],[0.1968+0.1
 # q6 = do_IK([mid_low2[0],mid_high1[1],mid_low2[2],mid_high2[3]],R)
 # q7 = q1
 
-#### This is for the robot to move its limbs in place
-low = [[0.52+offset, -0.77403],[-0.45-offset,-0.77403],[-0.45-offset,-0.77403],[0.52+offset, -0.77403]]
-high = [[0.52+offset, -0.52403],[-0.45-offset,-0.52403],[-0.45-offset,-0.52403],[0.52+offset, -0.52403]]
+#### This is for the robot to move its limbs in place, on flat terrain
+# low = [[0.52+offset, -0.77403],[-0.45-offset,-0.77403],[-0.45-offset,-0.77403],[0.52+offset, -0.77403]]
+# high = [[0.52+offset, -0.52403],[-0.45-offset,-0.52403],[-0.45-offset,-0.52403],[0.52+offset, -0.52403]]
+
+#this is for the slope
+height_offset = 0.1
+# low = [[0.52+offset, -0.77403 + height_offset],[-0.45-offset*5,-0.77403+ height_offset],[-0.45-offset*5,-0.77403+ height_offset],[0.52+offset, -0.77403+ height_offset]]
+# high = [[0.52+offset, -0.52403+ height_offset],[-0.45-offset*5,-0.52403+ height_offset],[-0.45-offset*5,-0.52403+ height_offset],[0.52+offset, -0.52403+ height_offset]]
+low = [[0.52+offset*3, -0.77403 + height_offset],[-0.45-offset,-0.77403+ height_offset],[-0.45-offset,-0.77403+ height_offset],[0.52+offset*3, -0.77403+ height_offset]]
+high = [[0.52+offset*3, -0.52403+ height_offset],[-0.45-offset,-0.52403+ height_offset],[-0.45-offset,-0.52403+ height_offset],[0.52+offset*3, -0.52403+ height_offset]]
 
 q1 = do_IK([low[0],low[1],low[2],low[3]],R)
 q2 = do_IK([high[0],low[1],high[2],low[3]],R)
@@ -125,8 +132,9 @@ times.append(current_time)
 
 #save the trajectory
 trajectory = Trajectory(times = times, milestones = traj)
-loader.save(trajectory,'auto','data/gallop_gait_3_steps')
+loader.save(trajectory,'auto','data/gallop_gait_3_steps_slope2')
 exit()
+
 #visualize the robot
 world = simulator.getWorld()
 vis.add("world",world)

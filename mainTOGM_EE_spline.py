@@ -25,9 +25,9 @@ global N_of_control_pts
 N_of_control_pts = 30
 global N
 N = 181 #9s trajectory 0.05
-terrain = 1
-
-
+terrain = 6
+diffne_mu = 1e-3
+target_speed = 0.4
 class Robosimian(System):
 	def __init__(self):
 		System.__init__(self,nx=30,nu=12,np=0,ode='Euler')
@@ -37,7 +37,7 @@ class Robosimian(System):
 		dt = 0.05
 		#Test 14+ should have extraploation set to be True
 		self.robot = robosimianSimulator(q= q_2D,q_dot = q_dot_2D,dt = dt,dyn = 'diffne', augmented = True, extrapolation = True, \
-			integrate_dt = dt,terrain = terrain)
+			integrate_dt = dt,terrain = terrain,diffne_mu = diffne_mu)
 
 	def dyn(self,t,x,u,p=None):  
 		a = self.robot.getDyn(x,u) #This is a numpy column 2D vector N*1
@@ -64,10 +64,22 @@ class EESpline2(AddX):
 	def __init__(self):
 		global N_of_control_pts
 		self.n = 4*N_of_control_pts 
-		self.lb = np.array(([-1.0]*N_of_control_pts)*4)
-		self.ub = np.array(([1.0]*N_of_control_pts)*4)
+		self.lb = np.array(([-2.0]*N_of_control_pts)*4)
+		self.ub = np.array(([2.0]*N_of_control_pts)*4)
 		AddX.__init__(self, n = self.n, lb = self.lb, ub = self.ub)
 
+############################
+#Terrain 5 spline          #
+############################
+
+pts = [(-3,0),(-2,0),(-1,0),(-0.5,0),(0,0.02),(0.25,0.1),(0.5,0.16),(1.7,-0.15),(2.0,-0.2),(2.7,-0.05),(3.5,0.25),(6,0),(10,0),(12,0)]
+t = []
+control_pts = []
+for pt in pts:
+    t.append(pt[0])
+    control_pts.append(pt[1])
+spz = CubicSpline(t,control_pts)
+spderiv= spz.derivative()
 
 ############################
 #Initialize the problem    #
@@ -88,11 +100,28 @@ else:
 ############################
 #Add state bounds          #
 ############################
-#TODO: Add other terrains
 degree10 = math.pi*10.0/180.0
-degree20 = math.pi*10.0/180.0
+degree20 = math.pi*20.0/180.0
+if terrain == 6:
+	terrain = 3
+	tan_10 = math.tan(-math.pi*5.0/180.0)
+	cos_10 = math.cos(-math.pi*5.0/180.0)
+	sin_10 = math.sin(-math.pi*5.0/180.0)
+	degree_10 = -math.pi*5.0/180.0
+else:
+	degree_10 = -degree10
+	tan_10 = math.tan(degree_10)
+	cos_10 = math.cos(degree_10)
+	sin_10 = math.sin(degree_10)
+
 tan10 = math.tan(degree10)
 cos10 = math.cos(degree10)
+tan20 = math.tan(degree20)
+cos20 = math.cos(degree20)
+
+degree_20 = -degree20
+tan_20 = math.tan(degree_20)
+cos_20 = math.cos(degree_20)
 if terrain == 0:
 	problem.xbd = [np.array([-0.2,0.4,-0.3] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2,0.3] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
@@ -101,14 +130,53 @@ if terrain == 0:
 
 elif terrain == 1:
 	#This is assuming that the target speed of the torso is 0.4m/s on the slope
-	problem.xbd = [np.array([-0.2,0.4,-0.3-degree10] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 + math.sin(degree10)*3.6,0.3-degree10] + [math.pi*1.5]*12 + [3]*15)]
+	problem.xbd = [np.array([-0.2,0.4,-0.3-degree10] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 + math.sin(degree10)*target_speed*9.0,0.3-degree10] + [math.pi*1.5]*12 + [3]*15)]
 	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
 	problem.x0bd = [np.array([-0.05,0.4,-0.3-degree10] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
-	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree10)*3.6,-0.3-degree10] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree10)*3.6,0.3-degree10] + \
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree10)*target_speed*9.0,-0.3-degree10] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree10)*target_speed*9.0,0.3-degree10] + \
 		[math.pi]*12 + [2]*15)]
 
-#TODO: add terrain 5
+elif terrain == 2:
+	#This is assuming that the target speed of the torso is 0.4m/s on the slope
+	problem.xbd = [np.array([-0.2,0.4,-0.3-degree20] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 + math.sin(degree20)*target_speed*9.0,0.3-degree20] + [math.pi*1.5]*12 + [3]*15)]
+	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
+	problem.x0bd = [np.array([-0.05,0.4,-0.3-degree20] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.3] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree20)*target_speed*9.0,-0.3-degree20] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree20)*target_speed*9.0,0.3-degree20] + \
+		[math.pi]*12 + [2]*15)]
+
+elif terrain == 3:
+	#This is assuming that the target speed of the torso is 0.4m/s on the slope
+	problem.xbd = [np.array([-0.2,0.4+math.sin(degree_10)*target_speed*9.0,-0.5 - degree_10] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 ,0.5 - degree_10] + [math.pi*1.5]*12 + [3]*15)]
+	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
+	problem.x0bd = [np.array([-0.05,0.4,-0.5 - degree_10] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.5] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree_10)*target_speed*9.0,-0.5-degree_10] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree_10)*target_speed*9.0,0.5-degree_10] + \
+		[math.pi]*12 + [2]*15)]
+	# problem.xfbd = [np.array([3,0.4 + math.sin(degree_10)*target_speed*9.0,-0.5-degree_10] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree_10)*target_speed*9.0,0.5-degree_10] + \
+	# 	[math.pi]*12 + [2]*15)]
+
+elif terrain == 4:
+	#This is assuming that the target speed of the torso is 0.4m/s on the slope
+	problem.xbd = [np.array([-0.2,0.4+math.sin(degree_20)*target_speed*9.0,-0.5 - degree_20] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2 ,0.5 - degree_20] + [math.pi*1.5]*12 + [3]*15)]
+	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
+	problem.x0bd = [np.array([-0.05,0.4,-0.5 - degree_20] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.5 - degree_20] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4 + math.sin(degree_20)*target_speed*9.0,-0.5-degree_20] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + math.sin(degree_20)*target_speed*9.0,0.5-degree_20] + \
+		[math.pi]*12 + [2]*15)]
+
+elif terrain == 5:
+	max_h = 0.4
+	min_h = -0.3
+	#This is assuming that the target speed of the torso is 0.4m/s on the slope
+	problem.xbd = [np.array([-0.2,0.4+min_h,-0.6] + [-math.pi*1.5]*12 + [-3]*15),np.array([5,1.2+max_h ,0.6] + [math.pi*1.5]*12 + [3]*15)]
+	problem.ubd = [np.array([-300]*12),np.array([300]*12)]
+	problem.x0bd = [np.array([-0.05,0.4,-0.5] + [-math.pi*1.5]*12 + [-2.0]*15),np.array([0.05,1.1,0.5] + [math.pi*1.5]*12 + [2.0]*15)]
+	problem.xfbd = [np.array([-0.2,0.4+min_h,-0.5] + [-math.pi]*12 + [-2]*15),np.array([5,1.1 + max_h,0.5] + \
+		[math.pi]*12 + [2]*15)]
+
+
+##Here for terrain 5, for simplicity reasons, use the vertical depth as the depth, so is that for the angle..
 class anklePoseConstr(NonLinearPointConstr):
+	"""Depth is calculated as the closest point to the surface for terrain 0-4, 5 for simplicity reasons, just use the easiest depth for now
+	"""
 	def __init__(self,terrain = 0):
 		self.terrain = terrain
 		lb = np.array([-0.3,-1.0,-0.3,-1.0,-0.3,-1.0,-0.3,-1.0])
@@ -118,6 +186,20 @@ class anklePoseConstr(NonLinearPointConstr):
 			if self.terrain == 1:
 				self.tana = tan10
 				self.cosa = cos10
+			elif self.terrain == 2:
+				self.tana = tan20
+				self.cosa = cos20
+			elif self.terrain == 3:
+				self.tana = tan_10
+				self.cosa = cos_10
+			elif self.terrain == 4:
+				self.tana = tan_20
+				self.cosa = cos_20
+			elif self.terrain == 5:
+				self.spz = spz
+				self.spderiv = spderiv
+				lb = np.array([-0.35,-1.0,-0.35,-1.0,-0.35,-1.0,-0.35,-1.0])
+				ub = np.array([1.0]*8)
 		NonLinearPointConstr.__init__(self,index = 0, nc = 8, nx = 30, nu = 12, np = 0 ,lb = lb, ub = ub, nG = 40)
 
 	def __callg__(self,x, F, G, row, col, rec, needg):
@@ -140,7 +222,7 @@ class anklePoseConstr(NonLinearPointConstr):
 					Gs.append(partial_Jp[i,j-1])
 				G[:] = Gs
 		elif self.terrain > 0 and self.terrain < 5:
-			F[:] = np.array([(-self.tana*p[0][0] + p[0][1])*self.cosa,p[0][2]+degree10,\
+			F[:] = np.array([(-self.tana*p[0][0] + p[0][1]),p[0][2]+degree10,\
 				(-self.tana*p[1][0] + p[1][1])*self.cosa,p[1][2]+degree10,\
 				(-self.tana*p[2][0] + p[2][1])*self.cosa,p[2][2]+degree10,\
 				(-self.tana*p[3][0] + p[3][1])*self.cosa,p[3][2]+degree10])
@@ -160,6 +242,14 @@ class anklePoseConstr(NonLinearPointConstr):
 						limb = int((i-1)/2)
 						Gs.append(partial_Jp[limb*3+2,j-1])
 				G[:] = Gs
+		#TODO
+		elif self.terrain == 5:
+			F[:] = np.array([(p[0][1] - self.spz(p[0][0])),p[0][2]+degree10,\
+				(p[1][1] - self.spz(p[1][0]))*self.cosa,p[1][2]+degree10,\
+				(-self.spz(p[2][0]) + p[2][1])*self.cosa,p[2][2]+degree10,\
+				(-self.tana*p[3][0] + p[3][1])*self.cosa,p[3][2]+degree10])
+			if needg:
+				pass
 
 class periodicCost(NonLinearObj):
 	def __init__(self,C = 0.1, T = 60):
@@ -476,7 +566,7 @@ class EESplineCost(NonLinearObj):
 class AngleSplineConstraint(NonLinearConstr):
 	def __init__(self,scale = 0.5):
 		global N,N_of_control_pts
-		self.gap = 1 #enforce constraint every 5 grid points
+		self.gap = 1 
 		self.nX = 30
 		self.nU = 12
 		self.nP = 0
@@ -491,7 +581,7 @@ class AngleSplineConstraint(NonLinearConstr):
 		self.scale = scale
 
 		NonLinearConstr.__init__(self, nsol = self.state_length + self.nAddX,nc = self.nc,lb = np.zeros(self.nc), ub = np.zeros(self.nc), \
-			gradmode='user', nG =  26064 ) #nG is obtained directly from looking at Gs #7696 gap = 5 #11584 gap = 1 #18824 gap = 1,controlpts = 20 #26064,30 control pts
+			gradmode='user', nG =  26064 )
 
 	def __callg__(self,x, F, G, row, col, rec, needg):
 		#note that in x, the first chunk elements are the states and controls, and the last chunk is the spline parameters
@@ -589,7 +679,6 @@ if terrain == 0:
 	xbase[1] = 0.75
 	xbase[15] = 0.4
 	R = np.ones(12)*0.00001  #0.00001
-
 elif terrain == 1:
 	Q = np.zeros(30)
 	Q[2] = 0.01 #angle of the torso
@@ -598,33 +687,67 @@ elif terrain == 1:
 	xbase[2] = -degree10
 	xbase[15] = 0.4*cos10
 	R = np.ones(12)*0.00001  #0.00001
+elif terrain == 2:
+	Q = np.zeros(30)
+	Q[2] = 0.01 #angle of the torso
+	Q[15] = 100.0
+	xbase = np.zeros(30)
+	xbase[2] = -degree20
+	xbase[15] = 0.4*cos20
+	R = np.ones(12)*0.00001  #0.00001
+elif terrain == 3:
+	Q = np.zeros(30)
+	Q[2] =  0.01 #angle of the torso
+	Q[15] = 100.0
+	xbase = np.zeros(30)
+	xbase[2] = -degree_10
+	xbase[15] = target_speed*cos_10
 
-targetVelocityCost = LqrObj(Q = Q,R=R,xbase = xbase)
-
+	# xbase[16] = 0.4*sin_10
+	# Q[16] = 100.0
+	R = np.ones(12)*1e-5
+elif terrain == 4:
+	Q = np.zeros(30)
+	Q[2] = 0.01 #angle of the torso
+	Q[15] = 100.0
+	xbase = np.zeros(30)
+	xbase[2] = -degree_20
+	xbase[15] = 0.4*cos_20
+	R = np.ones(12)*0.00001  #0.00001
+targetVelocityCost = LqrObj(Q = Q,R = R,xbase = xbase)
+# targetVelocityCost = LqrObj(Q = Q,xbase = xbase)
 ##############################
 #set the problem constraints #
 ##############################
 
 #setting 21,24
 constr1 = anklePoseConstr()
-periodicCost = periodicCost(C = 0.1,T = 60)
+periodicCost = periodicCost(C = 1.0,T = 60)
 problem.add_lqr_obj(targetVelocityCost)
 problem.addNonLinearObj(periodicCost)
 problem.addNonLinearPointConstr(constr1,path = True)
 
 if angle_spline_flag:
 	splineConstr = AngleSplineConstraint(scale = 0.5)
-	problem.addNonLinearConstr(splineConstr)
+	# problem.addNonLinearConstr(splineConstr)
 else:
 	splineConstr = EESplineConstraint()
 	#splineCost = EESplineCost()
-	# problem.addNonLinearObj(splineCost)
+	#problem.addNonLinearObj(splineCost)
 	problem.addNonLinearConstr(splineConstr)
 
 if terrain == 1:
 	terrainHeightCost = terrainHeightCost(degree10)
 	problem.addNonLinearPointObj(terrainHeightCost,path = True)
-
+elif terrain == 2:
+	terrainHeightCost = terrainHeightCost(degree20)
+	problem.addNonLinearPointObj(terrainHeightCost,path = True)
+elif terrain == 3:
+	terrainHeightCost = terrainHeightCost(degree_10)
+	problem.addNonLinearPointObj(terrainHeightCost,path = True)
+elif terrain == 4:
+	terrainHeightCost = terrainHeightCost(degree_20)
+	problem.addNonLinearPointObj(terrainHeightCost,path = True)
 ############################
 #preprocess                #
 ############################
@@ -656,8 +779,8 @@ print('preProcess took:',time.time() - startTime)
 #1004: how mu changes..
 ##debug information 1032
 
-run = '1'
-options = {'1105':'run'+run+'.log','1014':1000,'1023':1e-3,'1016':2,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':4,\
+run = '4_test44'
+options = {'1105':'run'+run+'.log','1014':5000,'1023':1e-3,'1016':2,'1003':0,'1022':1e-3,'1027':1e-3,'1006':0,'1049':0,'1080':0,'1082':1e-4,'1004':0,\
 	'history':True}
 cfg = OptConfig(backend = 'knitro', **options)
 slv = OptSolver(problem, cfg)
@@ -667,21 +790,12 @@ slv = OptSolver(problem, cfg)
 ##Initial Guess              ##
 ###############################
 
-#setting 21, run2 ,24
-path = 'results/PID_trajectory/15/'
+path = 'results/PID_trajectory/34/'
 traj_guess = np.hstack((np.load(path + 'q_init_guess.npy'),np.load(path + 'q_dot_init_guess.npy')))
 u_guess = np.load(path + 'u_init_guess.npy')
-
-# u_guess = []
-# for i in range(N):
-# 	u_guess.append([0]*12)
-# u_guess = np.array(u_guess)
-
-# for i in range(N):
-# 	traj_guess[i,1] += 0.2
-
-
 addX_guess = [np.array([0.0]*4*N_of_control_pts)]
+# addX_guess = [np.array([-degree_10]*4*N_of_control_pts)]
+
 
 # angle_list = []
 # for i in range(N_of_control_pts):
@@ -718,9 +832,9 @@ addX_guess = [np.array([0.0]*4*N_of_control_pts)]
 # 	+[-0.101704]+ [-0.101704,-0.101704 + 0.3*math.sin(math.pi/1.5*1.0),-0.101704]*3)]
 
 
-# traj_guess = np.load('results/32/run17/solution_x171.npy')
-# u_guess = np.load('results/32/run17/solution_u171.npy')
-# addX_guess = np.load('results/32/run17/solution_addx171.npy')
+# traj_guess = np.load('results/41/run1_test41/solution_x918.npy')
+# u_guess = np.load('results/41/run1_test41/solution_u918.npy')
+# addX_guess = np.load('results/41/run1_test41/solution_addx918.npy')
 
 guess = problem.genGuessFromTraj(X= traj_guess[0:N,:], U= u_guess[0:N,:], addx = addX_guess, t0 = 0, tf = tf)
 
